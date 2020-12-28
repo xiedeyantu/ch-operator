@@ -1,6 +1,7 @@
+apiVersion: rbac.authorization.k8s.io/v1beta1
 kind: Role
-apiVersion: rbac.authorization.k8s.io/v1
 metadata:
+  creationTimestamp: null
   name: ch-operator
 rules:
 - apiGroups:
@@ -42,16 +43,16 @@ rules:
   resources:
   - servicemonitors
   verbs:
-  - "get"
-  - "create"
+  - get
+  - create
 - apiGroups:
   - apps
-  resources:
-  - deployments/finalizers
   resourceNames:
   - ch-operator
+  resources:
+  - deployments/finalizers
   verbs:
-  - "update"
+  - update
 - apiGroups:
   - ""
   resources:
@@ -65,3 +66,15 @@ rules:
   - deployments
   verbs:
   - get
+- apiGroups:
+  - clickhouse.xiedeyantu.com
+  resources:
+  - '*'
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch

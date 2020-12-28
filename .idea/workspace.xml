@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ChangeListManager">
+    <list default="true" id="b9686f2d-d4ef-40b4-890e-0c3537f33dbd" name="Default Changelist" comment="init operator">
+      <change afterPath="$PROJECT_DIR$/.idea/ch-operator.iml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.idea/modules.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/deploy/cr/zookeeper.yaml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/pkg/apis/addtoscheme_clickhouse_v1.go" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/pkg/apis/clickhouse/group.go" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/pkg/apis/clickhouse/v1beta1/clickhousecluster_types.go" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/pkg/apis/clickhouse/v1beta1/doc.go" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/pkg/apis/clickhouse/v1beta1/register.go" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/pkg/apis/clickhouse/v1beta1/status.go" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/pkg/apis/clickhouse/v1beta1/zz_generated.deepcopy.go" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/pkg/common/util.go" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/pkg/common/zookeeper_util.go" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/pkg/controller/add_clickhousecluster.go" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/pkg/controller/clickhousecluster/clickhousecluster_controller.go" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/pkg/controller/clickhousecluster/zookeeper_controller.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/deploy/operator.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/deploy/operator.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/deploy/role.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/deploy/role.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/deploy/role_binding.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/deploy/role_binding.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/deploy/service_account.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/deploy/service_account.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/go.mod" beforeDir="false" afterPath="$PROJECT_DIR$/go.mod" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/go.sum" beforeDir="false" afterPath="$PROJECT_DIR$/go.sum" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Go File" />
+      </list>
+    </option>
+  </component>
+  <component name="GOROOT" url="file://$PROJECT_DIR$/../../../../../env/go" />
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="GoLibraries">
+    <option name="indexEntireGoPath" value="false" />
+  </component>
+  <component name="ProjectId" id="1luQlpaeFtNoDkkRcadb6AIe9Lb" />
+  <component name="ProjectLevelVcsManager" settingsEditedManually="true" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent">
+    <property name="DefaultGoTemplateProperty" value="Go File" />
+    <property name="RunOnceActivity.OpenProjectViewOnStart" value="true" />
+    <property name="RunOnceActivity.ShowReadmeOnStart" value="true" />
+    <property name="WebServerToolWindowFactoryState" value="false" />
+    <property name="configurable..is.expanded" value="false" />
+    <property name="configurable.GoLibrariesConfigurable.is.expanded" value="true" />
+    <property name="go.import.settings.migrated" value="true" />
+    <property name="go.sdk.automatically.set" value="true" />
+    <property name="go.tried.to.enable.integration.vgo.integrator" value="true" />
+    <property name="last_opened_file_path" value="$PROJECT_DIR$/pkg/apis/clickhouse/v1beta1" />
+    <property name="settings.editor.selected.configurable" value="go.vgo" />
+  </component>
+  <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/pkg/apis/clickhouse/v1beta1" />
+    </key>
+  </component>
+  <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="init operator" />
+    <option name="LAST_COMMIT_MESSAGE" value="init operator" />
+  </component>
+  <component name="VgoProject">
+    <integration-enabled>true</integration-enabled>
+    <environment>
+      <map>
+        <entry key="GOPROXY" value="https://goproxy.io,direct" />
+      </map>
+    </environment>
+  </component>
+</project>
