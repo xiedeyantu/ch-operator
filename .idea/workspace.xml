@@ -2,7 +2,18 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="b9686f2d-d4ef-40b4-890e-0c3537f33dbd" name="Default Changelist" comment="">
-      <change beforePath="$PROJECT_DIR$/deploy/cr/zookeeper.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/deploy/cr/chc.yaml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/pkg/common/constrant.go" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/pkg/config/clickhouse_config.go" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/pkg/config/clickhouse_config_test.go" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/pkg/controller/clickhousecluster/clickhouse_controller.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/deploy/cr/chc.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/deploy/cr/chc.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/deploy/crds/clickhouse.xiedeyantu.com_clickhouseclusters_crd.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/deploy/crds/clickhouse.xiedeyantu.com_clickhouseclusters_crd.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/go.sum" beforeDir="false" afterPath="$PROJECT_DIR$/go.sum" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/apis/clickhouse/v1beta1/clickhousecluster_types.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/apis/clickhouse/v1beta1/clickhousecluster_types.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/apis/clickhouse/v1beta1/zz_generated.deepcopy.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/apis/clickhouse/v1beta1/zz_generated.deepcopy.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/controller/clickhousecluster/clickhousecluster_controller.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/controller/clickhousecluster/clickhousecluster_controller.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/controller/clickhousecluster/zookeeper_controller.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/controller/clickhousecluster/zookeeper_controller.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -19,6 +30,7 @@
   <component name="GOROOT" url="file://$PROJECT_DIR$/../../../../../env/go" />
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+    <option name="UPDATE_TYPE" value="REBASE" />
   </component>
   <component name="GoLibraries">
     <option name="indexEntireGoPath" value="false" />
@@ -46,6 +58,58 @@
     <key name="CopyFile.RECENT_KEYS">
       <recent name="$PROJECT_DIR$/pkg/apis/clickhouse/v1beta1" />
     </key>
+  </component>
+  <component name="RunManager" selected="Go Test.TestGenerateChZkConfig in github.com/xiedeyantu/ch-operator/pkg/config">
+    <configuration name="go build github.com/xiedeyantu/ch-operator/cmd/manager" type="GoApplicationRunConfiguration" factoryName="Go Application" temporary="true" nameIsGenerated="true">
+      <module name="ch-operator" />
+      <working_directory value="$PROJECT_DIR$" />
+      <kind value="PACKAGE" />
+      <filePath value="$PROJECT_DIR$/cmd/manager/main.go" />
+      <package value="github.com/xiedeyantu/ch-operator/cmd/manager" />
+      <directory value="$PROJECT_DIR$" />
+      <method v="2" />
+    </configuration>
+    <configuration name="TestGenerateChListenConfig in github.com/xiedeyantu/ch-operator/pkg/config" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
+      <module name="ch-operator" />
+      <working_directory value="$PROJECT_DIR$/pkg/config" />
+      <framework value="gotest" />
+      <kind value="PACKAGE" />
+      <package value="github.com/xiedeyantu/ch-operator/pkg/config" />
+      <directory value="$PROJECT_DIR$" />
+      <filePath value="$PROJECT_DIR$" />
+      <pattern value="^\QTestGenerateChListenConfig\E$" />
+      <method v="2" />
+    </configuration>
+    <configuration name="TestGenerateChRemoteConfig in github.com/xiedeyantu/ch-operator/pkg/config" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
+      <module name="ch-operator" />
+      <working_directory value="$PROJECT_DIR$/pkg/config" />
+      <framework value="gotest" />
+      <kind value="PACKAGE" />
+      <package value="github.com/xiedeyantu/ch-operator/pkg/config" />
+      <directory value="$PROJECT_DIR$" />
+      <filePath value="$PROJECT_DIR$" />
+      <pattern value="^\QTestGenerateChRemoteConfig\E$" />
+      <method v="2" />
+    </configuration>
+    <configuration name="TestGenerateChZkConfig in github.com/xiedeyantu/ch-operator/pkg/config" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
+      <module name="ch-operator" />
+      <working_directory value="$PROJECT_DIR$/pkg/config" />
+      <framework value="gotest" />
+      <kind value="PACKAGE" />
+      <package value="github.com/xiedeyantu/ch-operator/pkg/config" />
+      <directory value="$PROJECT_DIR$" />
+      <filePath value="$PROJECT_DIR$" />
+      <pattern value="^\QTestGenerateChZkConfig\E$" />
+      <method v="2" />
+    </configuration>
+    <recent_temporary>
+      <list>
+        <item itemvalue="Go Test.TestGenerateChZkConfig in github.com/xiedeyantu/ch-operator/pkg/config" />
+        <item itemvalue="Go Build.go build github.com/xiedeyantu/ch-operator/cmd/manager" />
+        <item itemvalue="Go Test.TestGenerateChRemoteConfig in github.com/xiedeyantu/ch-operator/pkg/config" />
+        <item itemvalue="Go Test.TestGenerateChListenConfig in github.com/xiedeyantu/ch-operator/pkg/config" />
+      </list>
+    </recent_temporary>
   </component>
   <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
   <component name="TypeScriptGeneratedFilesManager">
