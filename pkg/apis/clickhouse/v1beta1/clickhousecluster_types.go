@@ -32,7 +32,8 @@ const (
 
 // ClickHouseClusterSpec defines the desired state of ClickHouseCluster
 type ClickHouseClusterSpec struct {
-	Zookeeper Zookeeper `json:"zookeeper,omitempty"`
+	Zookeeper  Zookeeper  `json:"zookeeper,omitempty"`
+	ClickHouse ClickHouse `json:"clickhouse,omitempty"`
 }
 
 type Zookeeper struct {
@@ -81,6 +82,42 @@ type Zookeeper struct {
 
 	// Domain of the kubernetes cluster, defaults to cluster.local
 	KubernetesClusterDomain string `json:"kubernetesClusterDomain,omitempty"`
+
+	// Containers defines to support multi containers
+	Containers []v1.Container `json:"containers,omitempty"`
+
+	// Volumes defines to support customized volumes
+	Volumes []v1.Volume `json:"volumes,omitempty"`
+}
+
+type ClickHouse struct {
+	Name string `json:"name"`
+
+	Image ContainerImage `json:"image,omitempty"`
+
+	Labels map[string]string `json:"labels,omitempty"`
+
+	Shards int32 `json:"shards,omitempty"`
+
+	Replicas int32 `json:"replicas,omitempty"`
+
+	Ports []v1.ContainerPort `json:"ports,omitempty"`
+
+	Pod PodPolicy `json:"pod,omitempty"`
+
+	StorageType string `json:"storageType,omitempty"`
+
+	Persistence *Persistence `json:"persistence,omitempty"`
+
+	Ephemeral *Ephemeral `json:"ephemeral,omitempty"`
+
+	//Conf ClickHouseConfig `json:"config,omitempty"`
+
+	// External host name appended for dns annotation
+	DomainName string `json:"domainName,omitempty"`
+
+	// Domain of the kubernetes cluster, defaults to cluster.local
+	//KubernetesClusterDomain string `json:"kubernetesClusterDomain,omitempty"`
 
 	// Containers defines to support multi containers
 	Containers []v1.Container `json:"containers,omitempty"`
@@ -318,11 +355,11 @@ func (p *PodPolicy) withDefaults(z *ClickHouseCluster) (changed bool) {
 		changed = true
 	}
 	if _, ok := p.Labels["app"]; !ok {
-		p.Labels["app"] = z.GetName()
+		p.Labels["app"] = z.Spec.Zookeeper.Name
 		changed = true
 	}
 	if _, ok := p.Labels["release"]; !ok {
-		p.Labels["release"] = z.GetName()
+		p.Labels["release"] = z.Spec.Zookeeper.Name
 		changed = true
 	}
 	if p.Affinity == nil {
@@ -338,7 +375,7 @@ func (p *PodPolicy) withDefaults(z *ClickHouseCluster) (changed bool) {
 									{
 										Key:      "app",
 										Operator: metav1.LabelSelectorOpIn,
-										Values:   []string{z.GetName()},
+										Values:   []string{z.Spec.Zookeeper.Name},
 									},
 								},
 							},
@@ -423,11 +460,11 @@ func (s *Zookeeper) withDefaults(z *ClickHouseCluster) (changed bool) {
 		changed = true
 	}
 	if _, ok := z.Spec.Zookeeper.Labels["app"]; !ok {
-		z.Spec.Zookeeper.Labels["app"] = z.GetName()
+		z.Spec.Zookeeper.Labels["app"] = z.Spec.Zookeeper.Name
 		changed = true
 	}
 	if _, ok := z.Spec.Zookeeper.Labels["release"]; !ok {
-		z.Spec.Zookeeper.Labels["release"] = z.GetName()
+		z.Spec.Zookeeper.Labels["release"] = z.Spec.Zookeeper.Name
 		changed = true
 	}
 	if s.Pod.withDefaults(z) {
@@ -460,7 +497,7 @@ func (z *ClickHouseCluster) WithDefaults() bool {
 
 // ConfigMapName returns the name of the cluster config-map
 func (z *ClickHouseCluster) ConfigMapName() string {
-	return fmt.Sprintf("%s-configmap", z.GetName())
+	return fmt.Sprintf("%s-configmap", z.Spec.Zookeeper.Name)
 }
 
 // GetKubernetesClusterDomain returns the cluster domain of kubernetes
@@ -469,6 +506,14 @@ func (z *ClickHouseCluster) GetKubernetesClusterDomain() string {
 		return "cluster.local"
 	}
 	return z.Spec.Zookeeper.KubernetesClusterDomain
+}
+
+func (z *ClickHouseCluster) ClickHousePorts() map[string]int32 {
+	ports := map[string]int32{}
+	for _, p := range z.Spec.ClickHouse.Ports {
+		ports[p.Name] = p.ContainerPort
+	}
+	return ports
 }
 
 // ZookeeperPorts returns a struct of ports
@@ -489,9 +534,9 @@ func (z *ClickHouseCluster) ZookeeperPorts() Ports {
 }
 
 // GetClientServiceName returns the name of the client service for the cluster
-func (z *ClickHouseCluster) GetClientServiceName() string {
-	return fmt.Sprintf("%s-client", z.GetName())
-}
+//func (z *ClickHouseCluster) GetClientServiceName() string {
+//	return fmt.Sprintf("%s-client", z.GetName())
+//}
 
 // Ports groups the ports for a zookeeper cluster node for easy access
 type Ports struct {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/go-logr/logr"
 	clickhousev1beta1 "github.com/xiedeyantu/ch-operator/pkg/apis/clickhouse/v1beta1"
+	"github.com/xiedeyantu/ch-operator/pkg/common"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	policyv1beta1 "k8s.io/api/policy/v1beta1"
@@ -19,6 +20,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+	"time"
 )
 
 // ReconcileTime is the delay between reconciliations
@@ -119,24 +121,138 @@ func (r *ReconcileClickHouseCluster) Reconcile(request reconcile.Request) (recon
 	}
 	for _, fun := range []reconcileFun{
 		//r.reconcileFinalizers,
-		r.reconcileConfigMap,
-		r.reconcileHeadlessService,
-		r.reconcileStatefulSet,
-		r.reconcilePodDisruptionBudget,
+		r.reconcileZkConfigMap,
+		r.reconcileZkHeadlessService,
+		r.reconcileZkStatefulSet,
+		r.reconcileZkPodDisruptionBudget,
 
-		r.reconcileClusterStatus,
+		r.reconcileZkClusterStatus,
 	} {
 		if err = fun(instance); err != nil {
 			return reconcile.Result{}, err
 		}
 	}
+
+	r.waitZkStatefulSetFinish(instance)
+
+	for _, fun := range []reconcileFun{
+		//r.reconcileFinalizers,
+		r.reconcileChConfigMap,
+		r.reconcileChHeadlessService,
+		r.reconcileChStatefulSet,
+
+		//r.reconcileZkClusterStatus,
+	} {
+		if err = fun(instance); err != nil {
+			return reconcile.Result{}, err
+		}
+	}
+
+	r.waitChStatefulSetFinish(instance)
+
 	// Recreate any missing resources every 'ReconcileTime'
 	//return reconcile.Result{RequeueAfter: ReconcileTime}, nil
 	return reconcile.Result{}, nil
 }
 
-func (r *ReconcileClickHouseCluster) reconcileConfigMap(instance *clickhousev1beta1.ClickHouseCluster) (err error) {
-	cm := MakeConfigMap(instance)
+func (r *ReconcileClickHouseCluster) CreateOrUpdateChConfigMap(instance *clickhousev1beta1.ClickHouseCluster, configMapType string) (err error) {
+	var configMapList []*corev1.ConfigMap
+	if configMapType == common.Common {
+		configMapList = append(configMapList, MakeChConfigMap(instance))
+	} else {
+		for i := int32(0); i < instance.Spec.ClickHouse.Shards; i++ {
+			for j := int32(0); j < instance.Spec.ClickHouse.Replicas; j++ {
+				configMapList = append(configMapList, MakeChPrivateConfigMap(instance, i, j))
+			}
+		}
+	}
+
+	for _, cm := range configMapList {
+		if err = controllerutil.SetControllerReference(instance, cm, r.scheme); err != nil {
+			return err
+		}
+		foundCm := &corev1.ConfigMap{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{
+			Name:      cm.Name,
+			Namespace: cm.Namespace,
+		}, foundCm)
+		if err != nil && errors.IsNotFound(err) {
+			r.log.Info("Creating a new ClickHouse ConfigMap",
+				"ConfigMap.Namespace", cm.Namespace,
+				"ConfigMap.Name", cm.Name)
+			err = r.client.Create(context.TODO(), cm)
+			if err != nil {
+				return err
+			}
+			//return nil
+		} else if err != nil {
+			return err
+		} else {
+			r.log.Info("Updating existing ConfigMap",
+				"ConfigMap.Namespace", foundCm.Namespace,
+				"ConfigMap.Name", foundCm.Name)
+			SyncConfigMap(foundCm, cm)
+			err = r.client.Update(context.TODO(), foundCm)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (r *ReconcileClickHouseCluster) reconcileChConfigMap(instance *clickhousev1beta1.ClickHouseCluster) (err error) {
+	err = r.CreateOrUpdateChConfigMap(instance, common.Common)
+	if err != nil {
+		return err
+	}
+	err = r.CreateOrUpdateChConfigMap(instance, common.Private)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (r *ReconcileClickHouseCluster) reconcileChStatefulSet(instance *clickhousev1beta1.ClickHouseCluster) (err error) {
+	for shard := int32(0); shard < instance.Spec.ClickHouse.Shards; shard++ {
+		for replica := int32(0); replica < instance.Spec.ClickHouse.Replicas; replica++ {
+			err = r.CreateOrUpdateChStatefulSet(instance, shard, replica)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (r *ReconcileClickHouseCluster) CreateOrUpdateChStatefulSet(instance *clickhousev1beta1.ClickHouseCluster, shard, replica int32) (err error) {
+	sts := MakeChStatefulSet(instance, shard, replica)
+	if err = controllerutil.SetControllerReference(instance, sts, r.scheme); err != nil {
+		return err
+	}
+	foundSts := &appsv1.StatefulSet{}
+	err = r.client.Get(context.TODO(), types.NamespacedName{
+		Name:      sts.Name,
+		Namespace: sts.Namespace,
+	}, foundSts)
+	if err != nil && errors.IsNotFound(err) {
+		r.log.Info("Creating a new ClickHouse StatefulSet",
+			"StatefulSet.Namespace", sts.Namespace,
+			"StatefulSet.Name", sts.Name)
+		err = r.client.Create(context.TODO(), sts)
+		if err != nil {
+			return err
+		}
+		return nil
+	} else if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (r *ReconcileClickHouseCluster) reconcileZkConfigMap(instance *clickhousev1beta1.ClickHouseCluster) (err error) {
+	cm := MakeZkConfigMap(instance)
 	if err = controllerutil.SetControllerReference(instance, cm, r.scheme); err != nil {
 		return err
 	}
@@ -169,7 +285,7 @@ func (r *ReconcileClickHouseCluster) reconcileConfigMap(instance *clickhousev1be
 	return nil
 }
 
-func (r *ReconcileClickHouseCluster) reconcileStatefulSet(instance *clickhousev1beta1.ClickHouseCluster) (err error) {
+func (r *ReconcileClickHouseCluster) reconcileZkStatefulSet(instance *clickhousev1beta1.ClickHouseCluster) (err error) {
 
 	// we cannot upgrade if cluster is in UpgradeFailed
 	if instance.Status.IsClusterInUpgradeFailedState() {
@@ -226,7 +342,124 @@ func (r *ReconcileClickHouseCluster) reconcileStatefulSet(instance *clickhousev1
 	}
 }
 
-func (r *ReconcileClickHouseCluster) reconcileHeadlessService(instance *clickhousev1beta1.ClickHouseCluster) (err error) {
+func (r *ReconcileClickHouseCluster) waitChStatefulSetFinish(instance *clickhousev1beta1.ClickHouseCluster) (err error) {
+	r.log.Info("reconcile clickhouse pods start...")
+
+	for {
+		foundSts := &appsv1.StatefulSet{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{
+			Name:      instance.Spec.ClickHouse.Name,
+			Namespace: instance.Namespace,
+		}, foundSts)
+		if err != nil {
+			r.log.Error(err, "get clickhouse statefulset error")
+			return err
+		}
+
+		if foundSts.Status.ReadyReplicas == instance.Spec.Zookeeper.Replicas {
+			r.log.Info("reconcile clickhouse pods finish...")
+			return nil
+		}
+
+		r.log.Info("reconcile clickhouse pods",
+			"ReadyReplicas", foundSts.Status.ReadyReplicas,
+			"Replicas", instance.Spec.Zookeeper.Replicas)
+		time.Sleep(5 * time.Second)
+	}
+}
+
+func (r *ReconcileClickHouseCluster) waitZkStatefulSetFinish(instance *clickhousev1beta1.ClickHouseCluster) (err error) {
+	r.log.Info("reconcile zookeeper pods start...")
+
+	for {
+		foundSts := &appsv1.StatefulSet{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{
+			Name:      instance.Spec.Zookeeper.Name,
+			Namespace: instance.Namespace,
+		}, foundSts)
+		if err != nil {
+			r.log.Error(err, "get zookeeper statefulset error")
+			return err
+		}
+
+		if foundSts.Status.ReadyReplicas == instance.Spec.Zookeeper.Replicas {
+			r.log.Info("reconcile zookeeper pods finish...")
+			return nil
+		}
+
+		r.log.Info("reconcile zk pods",
+			"ReadyReplicas", foundSts.Status.ReadyReplicas,
+			"Replicas", instance.Spec.Zookeeper.Replicas)
+		time.Sleep(5 * time.Second)
+	}
+}
+
+func (r *ReconcileClickHouseCluster) reconcileChHeadlessService(instance *clickhousev1beta1.ClickHouseCluster) (err error) {
+	svc := MakeChHeadlessService(instance, 0, 0)
+	if err = controllerutil.SetControllerReference(instance, svc, r.scheme); err != nil {
+		return err
+	}
+	foundSvc := &corev1.Service{}
+	err = r.client.Get(context.TODO(), types.NamespacedName{
+		Name:      svc.Name,
+		Namespace: svc.Namespace,
+	}, foundSvc)
+	if err != nil && errors.IsNotFound(err) {
+		r.log.Info("Creating new ClickHouse headless service",
+			"Service.Namespace", svc.Namespace,
+			"Service.Name", svc.Name)
+		err = r.client.Create(context.TODO(), svc)
+		if err != nil {
+			return err
+		}
+		return nil
+	} else if err != nil {
+		return err
+	} else {
+		r.log.Info("Updating existing headless service",
+			"Service.Namespace", foundSvc.Namespace,
+			"Service.Name", foundSvc.Name)
+		SyncService(foundSvc, svc)
+		err = r.client.Update(context.TODO(), foundSvc)
+		if err != nil {
+			return err
+		}
+	}
+
+	svc = MakeChHeadlessService(instance, 0, 1)
+	if err = controllerutil.SetControllerReference(instance, svc, r.scheme); err != nil {
+		return err
+	}
+	foundSvc = &corev1.Service{}
+	err = r.client.Get(context.TODO(), types.NamespacedName{
+		Name:      svc.Name,
+		Namespace: svc.Namespace,
+	}, foundSvc)
+	if err != nil && errors.IsNotFound(err) {
+		r.log.Info("Creating new ClickHouse headless service",
+			"Service.Namespace", svc.Namespace,
+			"Service.Name", svc.Name)
+		err = r.client.Create(context.TODO(), svc)
+		if err != nil {
+			return err
+		}
+		return nil
+	} else if err != nil {
+		return err
+	} else {
+		r.log.Info("Updating existing headless service",
+			"Service.Namespace", foundSvc.Namespace,
+			"Service.Name", foundSvc.Name)
+		SyncService(foundSvc, svc)
+		err = r.client.Update(context.TODO(), foundSvc)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *ReconcileClickHouseCluster) reconcileZkHeadlessService(instance *clickhousev1beta1.ClickHouseCluster) (err error) {
 	svc := MakeHeadlessService(instance)
 	if err = controllerutil.SetControllerReference(instance, svc, r.scheme); err != nil {
 		return err
@@ -260,7 +493,7 @@ func (r *ReconcileClickHouseCluster) reconcileHeadlessService(instance *clickhou
 	return nil
 }
 
-func (r *ReconcileClickHouseCluster) reconcilePodDisruptionBudget(instance *clickhousev1beta1.ClickHouseCluster) (err error) {
+func (r *ReconcileClickHouseCluster) reconcileZkPodDisruptionBudget(instance *clickhousev1beta1.ClickHouseCluster) (err error) {
 	pdb := MakePodDisruptionBudget(instance)
 	if err = controllerutil.SetControllerReference(instance, pdb, r.scheme); err != nil {
 		return err
@@ -285,7 +518,7 @@ func (r *ReconcileClickHouseCluster) reconcilePodDisruptionBudget(instance *clic
 	return nil
 }
 
-func (r *ReconcileClickHouseCluster) reconcileClusterStatus(instance *clickhousev1beta1.ClickHouseCluster) (err error) {
+func (r *ReconcileClickHouseCluster) reconcileZkClusterStatus(instance *clickhousev1beta1.ClickHouseCluster) (err error) {
 	if instance.Status.IsClusterInUpgradingState() || instance.Status.IsClusterInUpgradeFailedState() {
 		return nil
 	}
