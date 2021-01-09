@@ -1,7 +1,7 @@
 apiVersion: clickhouse.xiedeyantu.com/v1beta1
 kind: ClickHouseCluster
 metadata:
-  name: chc
+  name: clickhousecluster
 spec:
   zookeeper:
     name: zookeeper
