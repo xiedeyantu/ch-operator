@@ -3,12 +3,12 @@ package clickhousecluster
 import (
 	"fmt"
 	"github.com/xiedeyantu/ch-operator/pkg/apis/clickhouse/v1beta1"
+	"github.com/xiedeyantu/ch-operator/pkg/common"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	policyv1beta1 "k8s.io/api/policy/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"reflect"
 	"strconv"
 	"strings"
 )
@@ -18,35 +18,30 @@ const (
 	dot                      = "."
 )
 
-func headlessDomain(c *v1beta1.ClickHouseCluster) string {
-	return fmt.Sprintf("%s.%s.svc.%s", zkHeadlessSvcName(c), c.GetNamespace(), c.GetKubernetesClusterDomain())
-}
-
-func zkHeadlessSvcName(c *v1beta1.ClickHouseCluster) string {
-	return fmt.Sprintf("%s-headless", c.Spec.Zookeeper.Name)
-}
-
-var zkDataVolume = "data"
-
 // MakeStatefulSet return a zookeeper stateful set from the zk spec
 func MakeStatefulSet(c *v1beta1.ClickHouseCluster) *appsv1.StatefulSet {
-	extraVolumes := []v1.Volume{}
-	persistence := c.Spec.Zookeeper.Persistence
-	pvcs := []v1.PersistentVolumeClaim{}
+	var zkDataVolume = "data"
+	var extraVolumes []v1.Volume
+	persistence := v1beta1.Persistence{}
+	persistence.WithDefaults()
+	var pvcs []v1.PersistentVolumeClaim
 	if strings.EqualFold(c.Spec.Zookeeper.StorageType, "ephemeral") {
 		extraVolumes = append(extraVolumes, v1.Volume{
 			Name: zkDataVolume,
 			VolumeSource: v1.VolumeSource{
-				EmptyDir: &c.Spec.Zookeeper.Ephemeral.EmptyDirVolumeSource,
+				EmptyDir: &v1.EmptyDirVolumeSource{
+					Medium:    "",
+					SizeLimit: nil,
+				},
 			},
 		})
 	} else {
 		pvcs = append(pvcs, v1.PersistentVolumeClaim{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: zkDataVolume,
-				Labels: mergeLabels(
+				Labels: common.MergeLabels(
 					c.Spec.Zookeeper.Labels,
-					map[string]string{"app": c.Name},
+					map[string]string{"app": c.GetZkName()},
 				),
 				Annotations: c.Spec.Zookeeper.Persistence.Annotations,
 			},
@@ -59,16 +54,19 @@ func MakeStatefulSet(c *v1beta1.ClickHouseCluster) *appsv1.StatefulSet {
 			APIVersion: "apps/v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      c.Spec.Zookeeper.Name,
+			Name:      c.GetZkName(),
 			Namespace: c.Namespace,
-			Labels:    c.Spec.Zookeeper.Labels,
+			Labels: common.MergeLabels(
+				c.Spec.Zookeeper.Labels,
+				map[string]string{"app": c.GetZkName()},
+			),
 		},
 		Spec: appsv1.StatefulSetSpec{
-			ServiceName: zkHeadlessSvcName(c),
+			ServiceName: fmt.Sprintf("%s-zk", c.GetZkName()),
 			Replicas:    &c.Spec.Zookeeper.Replicas,
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{
-					"app": c.Spec.Zookeeper.Name,
+					"app": c.GetZkName(),
 				},
 			},
 			UpdateStrategy: appsv1.StatefulSetUpdateStrategy{
@@ -77,12 +75,10 @@ func MakeStatefulSet(c *v1beta1.ClickHouseCluster) *appsv1.StatefulSet {
 			PodManagementPolicy: appsv1.ParallelPodManagement,
 			Template: v1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					GenerateName: c.Spec.Zookeeper.Name,
-					Labels: mergeLabels(
+					GenerateName: fmt.Sprintf("%s-zk", c.GetZkName()),
+					Labels: common.MergeLabels(
 						c.Spec.Zookeeper.Labels,
-						map[string]string{
-							"app": c.Spec.Zookeeper.Name,
-						},
+						map[string]string{"app": c.GetZkName()},
 					),
 					Annotations: c.Spec.Zookeeper.Pod.Annotations,
 				},
@@ -93,12 +89,15 @@ func MakeStatefulSet(c *v1beta1.ClickHouseCluster) *appsv1.StatefulSet {
 	}
 }
 
-func makeZkPodSpec(z *v1beta1.ClickHouseCluster, volumes []v1.Volume) v1.PodSpec {
+func makeZkPodSpec(c *v1beta1.ClickHouseCluster, volumes []v1.Volume) v1.PodSpec {
+	ports := v1beta1.FillZkContainerPortsWithDefaults(c.Spec.Zookeeper.Ports)
+	image := v1beta1.ContainerImage{}
+	image.WithZkDefaults()
 	zkContainer := v1.Container{
-		Name:            "zookeeper",
-		Image:           z.Spec.Zookeeper.Image.ToString(),
-		Ports:           z.Spec.Zookeeper.Ports,
-		ImagePullPolicy: z.Spec.Zookeeper.Image.PullPolicy,
+		Name:            "zookeeper-server",
+		Image:           image.ToString(),
+		Ports:           ports,
+		ImagePullPolicy: image.PullPolicy,
 		ReadinessProbe: &v1.Probe{
 			Handler: v1.Handler{
 				Exec: &v1.ExecAction{Command: []string{"bash", "-c", "OK=$(echo ruok | nc 127.0.0.1 2181); if [[ \"$OK\" == \"imok\" ]]; then exit 0; else exit 1; fi"}},
@@ -125,36 +124,39 @@ func makeZkPodSpec(z *v1beta1.ClickHouseCluster, volumes []v1.Volume) v1.PodSpec
 		},
 		Command: []string{"bash", "-c", makeZkStartCommand()},
 	}
-	if z.Spec.Zookeeper.Pod.Resources.Limits != nil || z.Spec.Zookeeper.Pod.Resources.Requests != nil {
-		zkContainer.Resources = z.Spec.Zookeeper.Pod.Resources
+	if c.Spec.Zookeeper.Pod.Resources.Limits != nil || c.Spec.Zookeeper.Pod.Resources.Requests != nil {
+		zkContainer.Resources = c.Spec.Zookeeper.Pod.Resources
 	}
 	volumes = append(volumes, v1.Volume{
 		Name: "conf",
 		VolumeSource: v1.VolumeSource{
 			ConfigMap: &v1.ConfigMapVolumeSource{
 				LocalObjectReference: v1.LocalObjectReference{
-					Name: z.ConfigMapName(),
+					Name: c.ConfigMapName(),
 				},
 			},
 		},
 	})
-
+	podPolicy := v1beta1.PodPolicy{}
+	podPolicy.WithDefaults(c)
 	podSpec := v1.PodSpec{
-		Containers: append(z.Spec.Zookeeper.Containers, zkContainer),
-		Affinity:   z.Spec.Zookeeper.Pod.Affinity,
-		Volumes:    append(z.Spec.Zookeeper.Volumes, volumes...),
+		Containers: append(c.Spec.Zookeeper.Containers, zkContainer),
+		Affinity:   podPolicy.Affinity,
+		Volumes:    append(c.Spec.Zookeeper.Volumes, volumes...),
 	}
-	if reflect.DeepEqual(v1.PodSecurityContext{}, z.Spec.Zookeeper.Pod.SecurityContext) {
-		podSpec.SecurityContext = z.Spec.Zookeeper.Pod.SecurityContext
-	}
-	podSpec.NodeSelector = z.Spec.Zookeeper.Pod.NodeSelector
-	podSpec.Tolerations = z.Spec.Zookeeper.Pod.Tolerations
-	podSpec.TerminationGracePeriodSeconds = &z.Spec.Zookeeper.Pod.TerminationGracePeriodSeconds
-	podSpec.ServiceAccountName = z.Spec.Zookeeper.Pod.ServiceAccountName
+	//if reflect.DeepEqual(v1.PodSecurityContext{}, c.Spec.Zookeeper.Pod.SecurityContext) {
+	//	podSpec.SecurityContext = c.Spec.Zookeeper.Pod.SecurityContext
+	//}
+	podSpec.NodeSelector = c.Spec.Zookeeper.Pod.NodeSelector
+	podSpec.Tolerations = c.Spec.Zookeeper.Pod.Tolerations
+	podSpec.TerminationGracePeriodSeconds = &c.Spec.Zookeeper.Pod.TerminationGracePeriodSeconds
+	podSpec.ServiceAccountName = c.Spec.Zookeeper.Pod.ServiceAccountName
 	return podSpec
 }
 
 func MakeZkConfigMap(c *v1beta1.ClickHouseCluster) *v1.ConfigMap {
+	conf := &c.Spec.Zookeeper.Conf
+	conf.WithDefaults()
 	return &v1.ConfigMap{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "ConfigMap",
@@ -163,7 +165,10 @@ func MakeZkConfigMap(c *v1beta1.ClickHouseCluster) *v1.ConfigMap {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      c.ConfigMapName(),
 			Namespace: c.Namespace,
-			Labels:    c.Spec.Zookeeper.Labels,
+			Labels: common.MergeLabels(
+				c.Spec.Zookeeper.Labels,
+				map[string]string{"app": c.GetZkName()},
+			),
 		},
 		Data: map[string]string{
 			"zoo.cfg":          makeZkConfigString(c),
@@ -172,17 +177,47 @@ func MakeZkConfigMap(c *v1beta1.ClickHouseCluster) *v1.ConfigMap {
 	}
 }
 
-// MakeHeadlessService returns an internal headless-service for the zk
+// MakeZkHeadlessService returns an internal headless-service for the zk
 // stateful-set
-func MakeHeadlessService(c *v1beta1.ClickHouseCluster) *v1.Service {
-	ports := c.ZookeeperPorts()
-	svcPorts := []v1.ServicePort{
-		{Name: "tcp-client", Port: ports.Client},
-		{Name: "tcp-quorum", Port: ports.Quorum},
-		{Name: "tcp-leader-election", Port: ports.Leader},
-		{Name: "tcp-metrics", Port: ports.Metrics},
+func MakeZkHeadlessService(c *v1beta1.ClickHouseCluster) *v1.Service {
+	var dnsName string
+	var annotationMap map[string]string
+	svcName := fmt.Sprintf("%s-zk", c.GetZkName())
+	if c.Spec.Zookeeper.DomainName != "" {
+		domainName := strings.TrimSpace(c.Spec.Zookeeper.DomainName)
+		if strings.HasSuffix(domainName, dot) {
+			dnsName = svcName + dot + domainName
+		} else {
+			dnsName = svcName + dot + domainName + dot
+		}
+		annotationMap = map[string]string{externalDNSAnnotationKey: dnsName}
+	} else {
+		annotationMap = map[string]string{}
 	}
-	return makeZkService(zkHeadlessSvcName(c), svcPorts, false, c)
+
+	svcPorts := v1beta1.FillZkServicePortsWithDefaults(c.Spec.Zookeeper.Ports)
+	service := v1.Service{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Service",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      svcName,
+			Namespace: c.Namespace,
+			Labels: common.MergeLabels(
+				c.Spec.Zookeeper.Labels,
+				map[string]string{"app": c.GetZkName()},
+			),
+			Annotations: annotationMap,
+		},
+		Spec: v1.ServiceSpec{
+			Ports:     svcPorts,
+			Selector:  map[string]string{"app": c.GetZkName()},
+			ClusterIP: v1.ClusterIPNone,
+		},
+	}
+
+	return &service
 }
 
 func makeZkStartCommand() string {
@@ -211,7 +246,7 @@ func makeZkConfigString(c *v1beta1.ClickHouseCluster) string {
 	s := c.Spec.Zookeeper
 	serverConf := ""
 	for i := int32(0); i < s.Replicas; i++ {
-		serverConf = serverConf + fmt.Sprintf("server.%d=%s:2888:3888\n", i+1, GetZkDomainString(c, i))
+		serverConf = serverConf + fmt.Sprintf("server.%d=%s:2888:3888\n", i+1, v1beta1.GenerateZkDomain(c, i))
 	}
 	return "4lw.commands.whitelist=cons, envi, conf, crst, srvr, stat, mntr, ruok\n" +
 		"clientPort=2181\n" +
@@ -248,45 +283,6 @@ func makeZkLog4JConfigString() string {
 		"log4j.appender.CONSOLE.layout.ConversionPattern=%d{ISO8601} [myid:%X{myid}] - %-5p [%t:%C{1}@%L] - %m%n\n"
 }
 
-func makeZkService(name string, ports []v1.ServicePort, clusterIP bool, c *v1beta1.ClickHouseCluster) *v1.Service {
-	var dnsName string
-	var annotationMap map[string]string
-	if !clusterIP && c.Spec.Zookeeper.DomainName != "" {
-		domainName := strings.TrimSpace(c.Spec.Zookeeper.DomainName)
-		if strings.HasSuffix(domainName, dot) {
-			dnsName = name + dot + domainName
-		} else {
-			dnsName = name + dot + domainName + dot
-		}
-		annotationMap = map[string]string{externalDNSAnnotationKey: dnsName}
-	} else {
-		annotationMap = map[string]string{}
-	}
-	service := v1.Service{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "Service",
-			APIVersion: "v1",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: c.Namespace,
-			Labels: mergeLabels(
-				c.Spec.Zookeeper.Labels,
-				map[string]string{"app": c.Spec.Zookeeper.Name, "headless": strconv.FormatBool(!clusterIP)},
-			),
-			Annotations: annotationMap,
-		},
-		Spec: v1.ServiceSpec{
-			Ports:    ports,
-			Selector: map[string]string{"app": c.Spec.Zookeeper.Name},
-		},
-	}
-	if !clusterIP {
-		service.Spec.ClusterIP = v1.ClusterIPNone
-	}
-	return &service
-}
-
 // MakePodDisruptionBudget returns a pdb for the zookeeper cluster
 func MakePodDisruptionBudget(z *v1beta1.ClickHouseCluster) *policyv1beta1.PodDisruptionBudget {
 	pdbCount := intstr.FromInt(1)
@@ -309,28 +305,6 @@ func MakePodDisruptionBudget(z *v1beta1.ClickHouseCluster) *policyv1beta1.PodDis
 			},
 		},
 	}
-}
-
-// MergeLabels merges label maps
-func mergeLabels(l ...map[string]string) map[string]string {
-	res := make(map[string]string)
-
-	for _, v := range l {
-		for lKey, lValue := range v {
-			res[lKey] = lValue
-		}
-	}
-	return res
-}
-
-func GetZkDomainString(c *v1beta1.ClickHouseCluster, index int32) (ZkDomain string) {
-	ZkDomain = fmt.Sprintf("%s-%d.%s.%s.svc.%s",
-		c.Spec.Zookeeper.Name,
-		index,
-		zkHeadlessSvcName(c),
-		c.GetNamespace(),
-		c.GetKubernetesClusterDomain())
-	return ZkDomain
 }
 
 // SyncService synchronizes a service with an updated spec and validates it

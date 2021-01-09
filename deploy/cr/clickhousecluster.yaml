@@ -1,7 +1,7 @@
 apiVersion: clickhouse.xiedeyantu.com/v1beta1
 kind: ClickHouseCluster
 metadata:
-  name: clickhousecluster
+  name: chcluster
 spec:
   zookeeper:
     name: zookeeper
@@ -10,7 +10,7 @@ spec:
       repository: zookeeper
       tag: 3.6.1
       pullPolicy: IfNotPresent
-    storageType: persistence
+    storageType: ephemeral
     persistence:
       reclaimPolicy: Delete
       spec:
@@ -21,13 +21,13 @@ spec:
 
   clickhouse:
     name: clickhouse
-    shards: 1
+    shards: 2
     replicas: 2
     image:
       repository: xiedeyantu/clickhouse-server
       tag: 20.3.18.10
       pullPolicy: IfNotPresent
-    storageType: persistence
+    storageType: ephemeral
     persistence:
       reclaimPolicy: Delete
       spec:

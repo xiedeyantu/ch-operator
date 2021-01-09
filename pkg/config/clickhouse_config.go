@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/xml"
 	"fmt"
+	clickhousev1beta1 "github.com/xiedeyantu/ch-operator/pkg/apis/clickhouse/v1beta1"
 	"strconv"
 )
 
@@ -82,7 +83,7 @@ func GenerateChZkConfig(zks []string) string {
 	return string(resXML)
 }
 
-func GenerateChRemoteConfig(shard, replica int32, hostnamePre, namespace, k8sDomain string) string {
+func GenerateChRemoteConfig(shard, replica int32, hostnamePre string) string {
 	var r = RemoteConfig{}
 	for i := int32(0); i < shard; i++ {
 		var replicas []Replica
@@ -106,15 +107,12 @@ func GenerateChRemoteConfig(shard, replica int32, hostnamePre, namespace, k8sDom
 	return string(resXML)
 }
 
-func GenerateChMacrosConfig(shards, replicas int32, hostnamePre string) string {
+func GenerateChMacrosConfig(shards int32, hostname string) string {
 	var m = MacrosConfig{
 		Macros: Macros{
 			Cluster: "default",
 			Shard:   strconv.FormatInt(int64(shards), 10),
-			Replica: fmt.Sprintf("%s-%s-%s",
-				hostnamePre,
-				strconv.FormatInt(int64(shards), 10),
-				strconv.FormatInt(int64(replicas), 10)),
+			Replica: hostname,
 		},
 	}
 
@@ -124,10 +122,6 @@ func GenerateChMacrosConfig(shards, replicas int32, hostnamePre string) string {
 		return ""
 	}
 	return string(resXML)
-}
-
-func ChHeadlessSvcName(name string, shard, replica int32) string {
-	return fmt.Sprintf("%s-%d-%d", name, shard, replica)
 }
 
 func GenerateChListenConfig() string {
@@ -144,4 +138,24 @@ func GenerateChListenConfig() string {
 	}
 
 	return string(resXML)
+}
+
+func GenerateChInitStartCommand(c *clickhousev1beta1.ClickHouseCluster) string {
+	cmd := fmt.Sprintf(`
+	  while true; do
+		for i in $(seq 1 3); do
+		  domain=%s-$(($i-1)).%s-zk.default.svc.cluster.local
+		  role=$(echo srvr | nc $domain 2181|grep Mode|awk '{print $2}');
+		  echo $domain $role
+		  if [[ $role = "leader" ]]; then
+			exit 0;
+		  fi
+		done;
+	  done;`,
+		c.GetZkName(), c.GetZkName())
+	return cmd
+}
+
+func GenerateChStartCommand() string {
+	return "/entrypoint.sh"
 }

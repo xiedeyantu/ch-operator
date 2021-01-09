@@ -14,7 +14,7 @@ func TestGenerateChZkConfig(t *testing.T) {
 func TestGenerateChRemoteConfig(t *testing.T) {
 	shards := int32(3)
 	replica := int32(3)
-	cfg := GenerateChRemoteConfig(shards, replica, "clickhouse", "default", "svc.cluster.local")
+	cfg := GenerateChRemoteConfig(shards, replica, "clickhouse")
 	fmt.Println(cfg)
 }
 

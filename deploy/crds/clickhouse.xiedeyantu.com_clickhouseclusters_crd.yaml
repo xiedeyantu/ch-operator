@@ -34,7 +34,6 @@ spec:
             clickhouse:
               properties:
                 containers:
-                  description: Containers defines to support multi containers
                   items:
                     description: A single application container that you want to run
                       within a pod.
@@ -1094,17 +1093,14 @@ spec:
                     type: object
                   type: array
                 domainName:
-                  description: External host name appended for dns annotation
+                  description: Conf ClickHouseConfig `json:"config,omitempty"`
                   type: string
                 ephemeral:
                   properties:
                     emptydirvolumesource:
-                      description: EmptyDirVolumeSource is optional and this will
-                        create the emptydir volume It has two parameters Medium and
-                        SizeLimit which are optional as well Medium specifies What
-                        type of storage medium should back this directory. SizeLimit
-                        specifies Total amount of local storage required for this
-                        EmptyDir volume.
+                      description: Represents an empty directory for a pod. Empty
+                        directory volumes support ownership management and SELinux
+                        relabeling.
                       properties:
                         medium:
                           description: 'What type of storage medium should back this
@@ -1128,10 +1124,6 @@ spec:
                     pullPolicy:
                       description: PullPolicy describes a policy for if/when to pull
                         a container image
-                      enum:
-                      - Always
-                      - Never
-                      - IfNotPresent
                       type: string
                     repository:
                       type: string
@@ -1149,22 +1141,13 @@ spec:
                     annotations:
                       additionalProperties:
                         type: string
-                      description: Annotations specifies the annotations to attach
-                        to pvc the operator creates.
                       type: object
                     reclaimPolicy:
-                      description: VolumeReclaimPolicy is a zookeeper operator configuration.
-                        If it's set to Delete, the corresponding PVCs will be deleted
-                        by the operator when zookeeper cluster is deleted. The default
-                        value is Retain.
-                      enum:
-                      - Delete
-                      - Retain
                       type: string
                     spec:
-                      description: PersistentVolumeClaimSpec is the spec to describe
-                        PVC for the container This field is optional. If no PVC is
-                        specified default persistentvolume will get created.
+                      description: PersistentVolumeClaimSpec describes the common
+                        attributes of storage devices and allows a Source for provider-specific
+                        attributes
                       properties:
                         accessModes:
                           description: 'AccessModes contains the desired access modes
@@ -1284,7 +1267,7 @@ spec:
                 pod:
                   properties:
                     affinity:
-                      description: The scheduling constraints on pods.
+                      description: Affinity is a group of affinity scheduling rules.
                       properties:
                         nodeAffinity:
                           description: Describes node affinity scheduling rules for
@@ -1912,12 +1895,8 @@ spec:
                     annotations:
                       additionalProperties:
                         type: string
-                      description: Annotations specifies the annotations to attach
-                        to pods the operator creates.
                       type: object
                     env:
-                      description: List of environment variables to set in the container.
-                        This field cannot be updated.
                       items:
                         description: EnvVar represents an environment variable present
                           in a Container.
@@ -2024,8 +2003,6 @@ spec:
                         type: object
                       type: array
                     imagePullSecrets:
-                      description: ImagePullSecrets is a list of references to secrets
-                        in the same namespace to use for pulling any images
                       items:
                         description: LocalObjectReference contains enough information
                           to let you locate the referenced object inside the same
@@ -2040,20 +2017,14 @@ spec:
                     labels:
                       additionalProperties:
                         type: string
-                      description: Labels specifies the labels to attach to pods the
-                        operator creates for the zookeeper cluster.
                       type: object
                     nodeSelector:
                       additionalProperties:
                         type: string
-                      description: NodeSelector specifies a map of key-value pairs.
-                        For the pod to be eligible to run on a node, the node must
-                        have each of the indicated key-value pairs as labels.
                       type: object
                     resources:
-                      description: Resources is the resource requirements for the
-                        container. This field cannot be updated once the cluster is
-                        created.
+                      description: ResourceRequirements describes the compute resource
+                        requirements.
                       properties:
                         limits:
                           additionalProperties:
@@ -2072,8 +2043,10 @@ spec:
                           type: object
                       type: object
                     securityContext:
-                      description: 'SecurityContext specifies the security context
-                        for the entire pod More info: https://kubernetes.io/docs/tasks/configure-pod-container/security-context'
+                      description: PodSecurityContext holds pod-level security attributes
+                        and common container settings. Some fields are also present
+                        in container.securityContext.  Field values of container.securityContext
+                        take precedence over field values of PodSecurityContext.
                       properties:
                         fsGroup:
                           description: "A special supplemental group that applies
@@ -2199,17 +2172,11 @@ spec:
                           type: object
                       type: object
                     serviceAccountName:
-                      description: Service Account to be used in pods
                       type: string
                     terminationGracePeriodSeconds:
-                      description: TerminationGracePeriodSeconds is the amount of
-                        time that kubernetes will give for a pod instance to shutdown
-                        normally. The default value is 30.
                       format: int64
-                      minimum: 0
                       type: integer
                     tolerations:
-                      description: Tolerations specifies the pod's tolerations.
                       items:
                         description: The pod this Toleration is attached to tolerates
                           any taint that matches the triple <key,value,effect> using
@@ -2294,7 +2261,6 @@ spec:
                 storageType:
                   type: string
                 volumes:
-                  description: Volumes defines to support customized volumes
                   items:
                     description: Volume represents a named volume in a pod that may
                       be accessed by any container in the pod.
@@ -3514,10 +3480,6 @@ spec:
             zookeeper:
               properties:
                 config:
-                  description: Conf is the zookeeper configuration, which will be
-                    used to generate the static zookeeper configuration. If no configuration
-                    is provided required default values will be provided, and optional
-                    values will be excluded.
                   properties:
                     autoPurgePurgeInterval:
                       description: "The time interval in hours for which the purge
@@ -3599,7 +3561,6 @@ spec:
                       type: integer
                   type: object
                 containers:
-                  description: Containers defines to support multi containers
                   items:
                     description: A single application container that you want to run
                       within a pod.
@@ -4659,20 +4620,13 @@ spec:
                     type: object
                   type: array
                 domainName:
-                  description: External host name appended for dns annotation
                   type: string
                 ephemeral:
-                  description: Ephemeral is the configuration which helps create ephemeral
-                    storage At anypoint only one of Persistence or Ephemeral should
-                    be present in the manifest
                   properties:
                     emptydirvolumesource:
-                      description: EmptyDirVolumeSource is optional and this will
-                        create the emptydir volume It has two parameters Medium and
-                        SizeLimit which are optional as well Medium specifies What
-                        type of storage medium should back this directory. SizeLimit
-                        specifies Total amount of local storage required for this
-                        EmptyDir volume.
+                      description: Represents an empty directory for a pod. Empty
+                        directory volumes support ownership management and SELinux
+                        relabeling.
                       properties:
                         medium:
                           description: 'What type of storage medium should back this
@@ -4692,15 +4646,10 @@ spec:
                       type: object
                   type: object
                 image:
-                  description: Image is the  container image. default is zookeeper:0.2.7
                   properties:
                     pullPolicy:
                       description: PullPolicy describes a policy for if/when to pull
                         a container image
-                      enum:
-                      - Always
-                      - Never
-                      - IfNotPresent
                       type: string
                     repository:
                       type: string
@@ -4708,40 +4657,25 @@ spec:
                       type: string
                   type: object
                 kubernetesClusterDomain:
-                  description: Domain of the kubernetes cluster, defaults to cluster.local
                   type: string
                 labels:
                   additionalProperties:
                     type: string
-                  description: Labels specifies the labels to attach to pods the operator
-                    creates for the zookeeper cluster.
                   type: object
                 name:
                   type: string
                 persistence:
-                  description: Persistence is the configuration for zookeeper persistent
-                    layer. PersistentVolumeClaimSpec and VolumeReclaimPolicy can be
-                    specified in here.
                   properties:
                     annotations:
                       additionalProperties:
                         type: string
-                      description: Annotations specifies the annotations to attach
-                        to pvc the operator creates.
                       type: object
                     reclaimPolicy:
-                      description: VolumeReclaimPolicy is a zookeeper operator configuration.
-                        If it's set to Delete, the corresponding PVCs will be deleted
-                        by the operator when zookeeper cluster is deleted. The default
-                        value is Retain.
-                      enum:
-                      - Delete
-                      - Retain
                       type: string
                     spec:
-                      description: PersistentVolumeClaimSpec is the spec to describe
-                        PVC for the container This field is optional. If no PVC is
-                        specified default persistentvolume will get created.
+                      description: PersistentVolumeClaimSpec describes the common
+                        attributes of storage devices and allows a Source for provider-specific
+                        attributes
                       properties:
                         accessModes:
                           description: 'AccessModes contains the desired access modes
@@ -4859,12 +4793,9 @@ spec:
                       type: object
                   type: object
                 pod:
-                  description: Pod defines the policy to create pod for the zookeeper
-                    cluster. Updating the Pod does not take effect on any existing
-                    pods.
                   properties:
                     affinity:
-                      description: The scheduling constraints on pods.
+                      description: Affinity is a group of affinity scheduling rules.
                       properties:
                         nodeAffinity:
                           description: Describes node affinity scheduling rules for
@@ -5492,12 +5423,8 @@ spec:
                     annotations:
                       additionalProperties:
                         type: string
-                      description: Annotations specifies the annotations to attach
-                        to pods the operator creates.
                       type: object
                     env:
-                      description: List of environment variables to set in the container.
-                        This field cannot be updated.
                       items:
                         description: EnvVar represents an environment variable present
                           in a Container.
@@ -5604,8 +5531,6 @@ spec:
                         type: object
                       type: array
                     imagePullSecrets:
-                      description: ImagePullSecrets is a list of references to secrets
-                        in the same namespace to use for pulling any images
                       items:
                         description: LocalObjectReference contains enough information
                           to let you locate the referenced object inside the same
@@ -5620,20 +5545,14 @@ spec:
                     labels:
                       additionalProperties:
                         type: string
-                      description: Labels specifies the labels to attach to pods the
-                        operator creates for the zookeeper cluster.
                       type: object
                     nodeSelector:
                       additionalProperties:
                         type: string
-                      description: NodeSelector specifies a map of key-value pairs.
-                        For the pod to be eligible to run on a node, the node must
-                        have each of the indicated key-value pairs as labels.
                       type: object
                     resources:
-                      description: Resources is the resource requirements for the
-                        container. This field cannot be updated once the cluster is
-                        created.
+                      description: ResourceRequirements describes the compute resource
+                        requirements.
                       properties:
                         limits:
                           additionalProperties:
@@ -5652,8 +5571,10 @@ spec:
                           type: object
                       type: object
                     securityContext:
-                      description: 'SecurityContext specifies the security context
-                        for the entire pod More info: https://kubernetes.io/docs/tasks/configure-pod-container/security-context'
+                      description: PodSecurityContext holds pod-level security attributes
+                        and common container settings. Some fields are also present
+                        in container.securityContext.  Field values of container.securityContext
+                        take precedence over field values of PodSecurityContext.
                       properties:
                         fsGroup:
                           description: "A special supplemental group that applies
@@ -5779,17 +5700,11 @@ spec:
                           type: object
                       type: object
                     serviceAccountName:
-                      description: Service Account to be used in pods
                       type: string
                     terminationGracePeriodSeconds:
-                      description: TerminationGracePeriodSeconds is the amount of
-                        time that kubernetes will give for a pod instance to shutdown
-                        normally. The default value is 30.
                       format: int64
-                      minimum: 0
                       type: integer
                     tolerations:
-                      description: Tolerations specifies the pod's tolerations.
                       items:
                         description: The pod this Toleration is attached to tolerates
                           any taint that matches the triple <key,value,effect> using
@@ -5866,20 +5781,11 @@ spec:
                     type: object
                   type: array
                 replicas:
-                  description: "Replicas is the expected size of the zookeeper cluster.
-                    The pravega-operator will eventually make the size of the running
-                    cluster equal to the expected size. \n The valid range of size
-                    is from 1 to 7."
                   format: int32
-                  minimum: 1
                   type: integer
                 storageType:
-                  description: StorageType is used to tell which type of storage we
-                    will be using It can take either Ephemeral or persistence Default
-                    StorageType is Persistence storage
                   type: string
                 volumes:
-                  description: Volumes defines to support customized volumes
                   items:
                     description: Volume represents a named volume in a pod that may
                       be accessed by any container in the pod.
@@ -7100,8 +7006,13 @@ spec:
         status:
           description: ClickHouseClusterStatus defines the observed state of ClickHouseCluster
           properties:
+            chReadyReplicas:
+              format: int32
+              type: integer
+            chReplicas:
+              format: int32
+              type: integer
             conditions:
-              description: Conditions list all the applied conditions
               items:
                 description: ClusterCondition shows the current condition of a Zookeeper
                   cluster. Comply with k8s API conventions
@@ -7128,14 +7039,10 @@ spec:
                     type: string
                 type: object
               type: array
-            readyReplicas:
-              description: ReadyReplicas is the number of number of ready replicas
-                in the cluster
+            zkReadyReplicas:
               format: int32
               type: integer
             zkReplicas:
-              description: Replicas is the number of number of desired replicas in
-                the cluster
               format: int32
               type: integer
           type: object
