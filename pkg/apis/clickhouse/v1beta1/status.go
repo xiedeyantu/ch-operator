@@ -29,23 +29,13 @@ const (
 // ClusterCondition shows the current condition of a Zookeeper cluster.
 // Comply with k8s API conventions
 type ClusterCondition struct {
-	// Type of Zookeeper cluster condition.
 	Type ClusterConditionType `json:"type,omitempty"`
-
 	// Status of the condition, one of True, False, Unknown.
-	Status v1.ConditionStatus `json:"status,omitempty"`
-
-	// The reason for the condition's last transition.
-	Reason string `json:"reason,omitempty"`
-
-	// A human readable message indicating details about the transition.
-	Message string `json:"message,omitempty"`
-
-	// The last time this condition was updated.
-	LastUpdateTime string `json:"lastUpdateTime,omitempty"`
-
-	// Last time the condition transitioned from one status to another.
-	LastTransitionTime string `json:"lastTransitionTime,omitempty"`
+	Status             v1.ConditionStatus `json:"status,omitempty"`
+	Reason             string             `json:"reason,omitempty"`
+	Message            string             `json:"message,omitempty"`
+	LastUpdateTime     string             `json:"lastUpdateTime,omitempty"`
+	LastTransitionTime string             `json:"lastTransitionTime,omitempty"`
 }
 
 func (cs *ClickHouseClusterStatus) Init() {
