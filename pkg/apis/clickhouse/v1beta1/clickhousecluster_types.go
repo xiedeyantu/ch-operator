@@ -176,6 +176,8 @@ type ClickHouseClusterStatus struct {
 	ZkReadyReplicas int32              `json:"zkReadyReplicas,omitempty"`
 	ChReplicas      int32              `json:"chReplicas,omitempty"`
 	ChReadyReplicas int32              `json:"chReadyReplicas,omitempty"`
+	ChShardNum      int32              `json:"chShardNum,omitempty"`
+	ChReplicaNum    int32              `json:"chReplicaNum,omitempty"`
 	Conditions      []ClusterCondition `json:"conditions,omitempty"`
 }
 

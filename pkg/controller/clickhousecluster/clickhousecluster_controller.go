@@ -193,14 +193,48 @@ func (r *ReconcileClickHouseCluster) reconcileChConfigMap(instance *v1beta1.Clic
 }
 
 func (r *ReconcileClickHouseCluster) reconcileChStatefulSet(instance *v1beta1.ClickHouseCluster) (err error) {
-	for shard := int32(0); shard < instance.Spec.ClickHouse.Shards; shard++ {
-		for replica := int32(0); replica < instance.Spec.ClickHouse.Replicas; replica++ {
+	shardNum := instance.Spec.ClickHouse.Shards
+	replicaNum := instance.Spec.ClickHouse.Replicas
+
+	for shard := int32(0); shard < shardNum; shard++ {
+		for replica := int32(0); replica < replicaNum; replica++ {
 			err = r.CreateOrUpdateChStatefulSet(instance, shard, replica)
 			if err != nil {
 				return err
 			}
 		}
 	}
+
+	r.log.Info("clickhouse instance status",
+		"shards", instance.Status.ChShardNum,
+		"replicas", instance.Status.ChReplicaNum)
+
+	shardsNumCurrent := instance.Status.ChShardNum
+	replicasNumCurrent := instance.Status.ChReplicaNum
+	r.log.Info("last configuration",
+		"shards", shardsNumCurrent,
+		"replicas", replicasNumCurrent)
+
+	if (shardsNumCurrent <= shardNum && replicasNumCurrent <= replicaNum) {
+		return nil
+	}
+
+	if (shardsNumCurrent > shardNum) {
+		for shard := shardsNumCurrent; shard > shardNum; shard-- {
+			for replica := int32(0); replica < replicasNumCurrent; replica++ {
+				_ = r.DeleteChStatefulSet(instance, shard - 1, replica)
+			}
+		}
+	}
+
+	if (replicasNumCurrent > replicaNum) {
+		for shard := int32(0); shard < shardNum; shard++ {
+			for replica := replicasNumCurrent; replica > replicaNum; replica-- {
+				_ = r.DeleteChStatefulSet(instance, shard, replica - 1)
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -229,15 +263,71 @@ func (r *ReconcileClickHouseCluster) CreateOrUpdateChStatefulSet(instance *v1bet
 	return nil
 }
 
+func (r *ReconcileClickHouseCluster) DeleteChStatefulSet(instance *v1beta1.ClickHouseCluster, shard, replica int32) (err error) {
+	stsName := instance.GetChStatefulSetName(shard, replica)
+	r.log.Info("delete sts","stsName",stsName)
+
+	foundSts := &appsv1.StatefulSet{}
+	err = r.client.Get(context.TODO(), types.NamespacedName{
+		Name:      stsName,
+		Namespace: instance.Namespace,
+	}, foundSts)
+
+	if err != nil {
+		r.log.Error(err, "get clickhouse statefulset error")
+		return err
+	}
+
+	err = r.client.Delete(context.TODO(), foundSts)
+	if err != nil {
+		r.log.Error(err, "Error deleteing clickhouse statefulset.", "Name", stsName)
+	}
+	return nil
+}
+
 func (r *ReconcileClickHouseCluster) reconcileChHeadlessService(instance *v1beta1.ClickHouseCluster) (err error) {
-	for shard := int32(0); shard < instance.Spec.ClickHouse.Shards; shard++ {
-		for replica := int32(0); replica < instance.Spec.ClickHouse.Replicas; replica++ {
+	shardNum := instance.Spec.ClickHouse.Shards
+	replicaNum := instance.Spec.ClickHouse.Replicas
+
+	for shard := int32(0); shard < shardNum; shard++ {
+		for replica := int32(0); replica < replicaNum; replica++ {
 			err = r.CreateOrUpdateChHeadService(instance, shard, replica)
 			if err != nil {
 				return err
 			}
 		}
 	}
+
+	r.log.Info("clickhouse instance status",
+		"shards", instance.Status.ChShardNum,
+		"replicas", instance.Status.ChReplicaNum)
+
+	shardsNumCurrent := instance.Status.ChShardNum
+	replicasNumCurrent := instance.Status.ChReplicaNum
+	r.log.Info("last configuration**********************",
+		"shards", shardsNumCurrent,
+		"replicas", replicasNumCurrent)
+
+	if (shardsNumCurrent <= shardNum && replicasNumCurrent <= replicaNum) {
+		return nil
+	}
+
+	if (shardsNumCurrent > shardNum) {
+		for shard := shardsNumCurrent; shard > shardNum; shard-- {
+			for replica := int32(0); replica < replicasNumCurrent; replica++ {
+				_ = r.DeleteChHeadService(instance, shard - 1, replica)
+			}
+		}
+	}
+
+	if (replicasNumCurrent > replicaNum) {
+		for shard := int32(0); shard < shardNum; shard++ {
+			for replica := replicasNumCurrent; replica > replicaNum; replica-- {
+				_ = r.DeleteChHeadService(instance, shard, replica - 1)
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -271,6 +361,28 @@ func (r *ReconcileClickHouseCluster) CreateOrUpdateChHeadService(instance *v1bet
 		if err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+func (r *ReconcileClickHouseCluster) DeleteChHeadService(instance *v1beta1.ClickHouseCluster, shard, replica int32) (err error) {
+	svcName := instance.GetChStatefulSetName(shard, replica)
+	r.log.Info("delete svc","svsName",svcName)
+
+	foundSvc := &corev1.Service{}
+	err = r.client.Get(context.TODO(), types.NamespacedName{
+		Name:      svcName,
+		Namespace: instance.Namespace,
+	}, foundSvc)
+
+	if err != nil {
+		r.log.Error(err, "get clickhouse headless service error")
+		return err
+	}
+
+	err = r.client.Delete(context.TODO(), foundSvc)
+	if err != nil {
+		r.log.Error(err, "Error deleteing clickhouse headless service.", "Name", svcName)
 	}
 	return nil
 }
@@ -319,6 +431,9 @@ func (r *ReconcileClickHouseCluster) reconcileChClusterStatus(instance *v1beta1.
 		return nil
 	}
 	instance.Status.Init()
+	instance.Status.ChShardNum = instance.Spec.ClickHouse.Shards
+	instance.Status.ChReplicaNum = instance.Spec.ClickHouse.Replicas
+	_ = r.client.Status().Update(context.TODO(), instance)
 	r.log.Info("reconcile clickhouse pods start...")
 	instance.Status.ChReplicas = instance.Spec.ClickHouse.Shards * instance.Spec.ClickHouse.Replicas
 	for shard := int32(0); shard < instance.Spec.ClickHouse.Shards; shard++ {
