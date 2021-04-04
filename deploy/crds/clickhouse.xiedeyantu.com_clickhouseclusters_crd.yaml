@@ -9,6 +9,8 @@ spec:
     listKind: ClickHouseClusterList
     plural: clickhouseclusters
     singular: clickhousecluster
+    shortNames:
+      - chc
   scope: Namespaced
   subresources:
     status: {}

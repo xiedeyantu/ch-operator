@@ -1,9 +1,9 @@
-apiVersion: apps/v1beta1
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: ch-operator
 spec:
-  replicas: 1
+  replicas: {{ .Values.chOperator.replicas }}
   selector:
     matchLabels:
       name: ch-operator
@@ -15,10 +15,8 @@ spec:
       serviceAccountName: ch-operator
       containers:
         - name: ch-operator
-          image: xiedeyantu/ch-operator:v0.0.1
-          command:
-          - ch-operator
-          imagePullPolicy: Always
+          imagePullPolicy: {{ .Values.chOperator.imagePullPolicy }}
+          image: {{ .Values.chOperator.image }}:{{ .Values.chOperator.imageVersion }}
           env:
             - name: WATCH_NAMESPACE
               valueFrom:

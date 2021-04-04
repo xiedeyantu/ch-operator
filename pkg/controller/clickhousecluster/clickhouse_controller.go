@@ -239,9 +239,18 @@ func makeChPodSpec(c *v1beta1.ClickHouseCluster, volumes []v1.Volume, shard, rep
 		},
 	}...)
 
+	metricsContainer := v1.Container{
+		Name:            "clickhouse-exporter",
+		Image:           "f1yegor/clickhouse-exporter",
+		Ports:           []v1.ContainerPort{v1.ContainerPort{ContainerPort: 9116}},
+		ImagePullPolicy: image.PullPolicy,
+		Command: []string{"sh", "-c",
+			"/usr/local/bin/clickhouse_exporter -scrape_uri=http://localhost:8123"},
+	}
+
 	podSpec := v1.PodSpec{
 		InitContainers: []v1.Container{chInitContainer},
-		Containers:     append(c.Spec.ClickHouse.Containers, chContainer),
+		Containers:     append(c.Spec.ClickHouse.Containers, chContainer, metricsContainer),
 		Affinity:       c.Spec.ClickHouse.Pod.Affinity,
 		Volumes:        append(c.Spec.ClickHouse.Volumes, volumes...),
 	}
