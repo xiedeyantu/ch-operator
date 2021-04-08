@@ -10,7 +10,13 @@ spec:
       repository: zookeeper
       tag: 3.6.1
       pullPolicy: IfNotPresent
-    storageType: ephemeral
+    resources:
+      requests:
+        memory: "1Gi"
+        cpu: "1"
+      limits:
+        memory: "1Gi"
+        cpu: "1"
     persistence:
       reclaimPolicy: Delete
       spec:
@@ -21,13 +27,19 @@ spec:
 
   clickhouse:
     name: clickhouse
-    shards: 2
+    shards: 1
     replicas: 2
     image:
       repository: xiedeyantu/clickhouse-server
       tag: 20.3.18.10
       pullPolicy: IfNotPresent
-    storageType: ephemeral
+    resources:
+      requests:
+        memory: "1Gi"
+        cpu: "1"
+      limits:
+        memory: "1Gi"
+        cpu: "1"
     persistence:
       reclaimPolicy: Delete
       spec:

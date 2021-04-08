@@ -1,271 +1,345 @@
 package clickhousecluster
 
 import (
+	"context"
 	"github.com/xiedeyantu/ch-operator/pkg/apis/clickhouse/v1beta1"
 	"github.com/xiedeyantu/ch-operator/pkg/common"
-	"github.com/xiedeyantu/ch-operator/pkg/config"
 	appsv1 "k8s.io/api/apps/v1"
-	v1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/intstr"
-	"strings"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"time"
 )
 
-func MakeChConfigMap(c *v1beta1.ClickHouseCluster) *v1.ConfigMap {
-	var zkDomain []string
-	for i := int32(0); i < c.Spec.Zookeeper.Replicas; i++ {
-		zkDomain = append(zkDomain, v1beta1.GenerateZkDomain(c, i))
-	}
-	return &v1.ConfigMap{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "ConfigMap",
-			APIVersion: "v1",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      c.GetChName(),
-			Namespace: c.Namespace,
-			Labels:    c.Spec.Zookeeper.Labels,
-		},
-		Data: map[string]string{
-			"zookeeper.xml":   config.GenerateChZkConfig(zkDomain),
-			"host-listen.xml": config.GenerateChListenConfig(),
-			"remote-servers.xml": config.GenerateChRemoteConfig(c.Spec.ClickHouse.Shards,
-				c.Spec.ClickHouse.Replicas,
-				c.GetChName()),
-		},
-	}
-}
-
-func MakeChPrivateConfigMap(c *v1beta1.ClickHouseCluster, shard, replica int32) *v1.ConfigMap {
-	var zkDomain []string
-	for i := int32(0); i < c.Spec.Zookeeper.Replicas; i++ {
-		zkDomain = append(zkDomain, v1beta1.GenerateZkDomain(c, i))
-	}
-	return &v1.ConfigMap{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "ConfigMap",
-			APIVersion: "v1",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      c.GetChStatefulSetName(shard, replica),
-			Namespace: c.Namespace,
-			Labels:    c.Spec.ClickHouse.Labels,
-		},
-		Data: map[string]string{
-			"macros.xml": config.GenerateChMacrosConfig(shard, c.GetChStatefulSetName(shard, replica)),
-		},
-	}
-}
-
-func MakeChHeadlessService(c *v1beta1.ClickHouseCluster, shard, replica int32) *v1.Service {
-	var dnsName string
-	var annotationMap map[string]string
-	svcName := c.GetChStatefulSetName(shard, replica)
-	if c.Spec.ClickHouse.DomainName != "" {
-		domainName := strings.TrimSpace(c.Spec.ClickHouse.DomainName)
-		if strings.HasSuffix(domainName, dot) {
-			dnsName = svcName + dot + domainName
-		} else {
-			dnsName = svcName + dot + domainName + dot
+func (r *ReconcileClickHouseCluster) CreateOrUpdateChConfigMap(instance *v1beta1.ClickHouseCluster, configMapType string) (err error) {
+	var configMapList []*corev1.ConfigMap
+	if configMapType == common.Common {
+		configMapList = append(configMapList, MakeChConfigMap(instance))
+	} else {
+		for i := int32(0); i < instance.Spec.ClickHouse.Shards; i++ {
+			for j := int32(0); j < instance.Spec.ClickHouse.Replicas; j++ {
+				configMapList = append(configMapList, MakeChPrivateConfigMap(instance, i, j))
+			}
 		}
-		annotationMap = map[string]string{externalDNSAnnotationKey: dnsName}
+	}
+
+	for _, cm := range configMapList {
+		if err = controllerutil.SetControllerReference(instance, cm, r.scheme); err != nil {
+			return err
+		}
+		foundCm := &corev1.ConfigMap{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{
+			Name:      cm.Name,
+			Namespace: cm.Namespace,
+		}, foundCm)
+		if err != nil && errors.IsNotFound(err) {
+			r.log.Info("Creating a new ClickHouse ConfigMap",
+				"ConfigMap.Namespace", cm.Namespace,
+				"ConfigMap.Name", cm.Name)
+			err = r.client.Create(context.TODO(), cm)
+			if err != nil {
+				return err
+			}
+		} else if err != nil {
+			return err
+		} else {
+			r.log.Info("Updating existing ConfigMap",
+				"ConfigMap.Namespace", foundCm.Namespace,
+				"ConfigMap.Name", foundCm.Name)
+			SyncConfigMap(foundCm, cm)
+			err = r.client.Update(context.TODO(), foundCm)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (r *ReconcileClickHouseCluster) reconcileChConfigMap(instance *v1beta1.ClickHouseCluster) (err error) {
+	err = r.CreateOrUpdateChConfigMap(instance, common.Common)
+	if err != nil {
+		return err
+	}
+	err = r.CreateOrUpdateChConfigMap(instance, common.Private)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (r *ReconcileClickHouseCluster) reconcileChStatefulSet(instance *v1beta1.ClickHouseCluster) (err error) {
+	shardNum := instance.Spec.ClickHouse.Shards
+	replicaNum := instance.Spec.ClickHouse.Replicas
+
+	for shard := int32(0); shard < shardNum; shard++ {
+		for replica := int32(0); replica < replicaNum; replica++ {
+			err = r.CreateOrUpdateChStatefulSet(instance, shard, replica)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	currentShards := instance.Status.ChShardNum
+	currentReplicas := instance.Status.ChReplicaNum
+
+	if currentShards <= shardNum && currentReplicas <= replicaNum {
+		r.log.Info("ClickHouse cluster has not change")
+		return nil
+	}
+
+	r.log.Info("ClickHouse instance expected status",
+		"expectedShards", instance.Status.ChShardNum,
+		"expectedReplicas", instance.Status.ChReplicaNum,
+		"currentShards", currentShards,
+		"currentReplicas", currentReplicas)
+
+	if currentShards > shardNum {
+		for shard := currentShards; shard > shardNum; shard-- {
+			for replica := int32(0); replica < currentReplicas; replica++ {
+				_ = r.DeleteChStatefulSet(instance, shard - 1, replica)
+			}
+		}
+	}
+
+	if currentReplicas > replicaNum {
+		for shard := int32(0); shard < shardNum; shard++ {
+			for replica := currentReplicas; replica > replicaNum; replica-- {
+				_ = r.DeleteChStatefulSet(instance, shard, replica - 1)
+			}
+		}
+	}
+
+	return nil
+}
+
+func (r *ReconcileClickHouseCluster) CreateOrUpdateChStatefulSet(instance *v1beta1.ClickHouseCluster, shard, replica int32) (err error) {
+	sts := MakeChStatefulSet(instance, shard, replica)
+	if err = controllerutil.SetControllerReference(instance, sts, r.scheme); err != nil {
+		return err
+	}
+	foundSts := &appsv1.StatefulSet{}
+	err = r.client.Get(context.TODO(), types.NamespacedName{
+		Name:      sts.Name,
+		Namespace: sts.Namespace,
+	}, foundSts)
+	if err != nil && errors.IsNotFound(err) {
+		r.log.Info("Creating a new ClickHouse instance",
+			"StatefulSet.Namespace", sts.Namespace,
+			"StatefulSet.Name", sts.Name)
+		err = r.client.Create(context.TODO(), sts)
+		if err != nil {
+			return err
+		}
+	} else if err != nil {
+		return err
+	}
+
+	expectedStorage := instance.Spec.ClickHouse.Persistence.PersistentVolumeClaimSpec.Resources.Requests[corev1.ResourceStorage]
+	currentStorage := instance.Status.ClickHouseStatus.Resources.Requests[corev1.ResourceStorage]
+	if expectedStorage != currentStorage {
+		err = r.ScaleStorage(sts, "data", expectedStorage)
+		if err != nil {
+			return err
+		}
+	}
+
+	r.log.Info("ClickHouse instance exist",
+		"StatefulSet.Namespace", sts.Namespace,
+		"StatefulSet.Name", sts.Name)
+	return nil
+}
+
+func (r *ReconcileClickHouseCluster) DeleteChStatefulSet(instance *v1beta1.ClickHouseCluster, shard, replica int32) (err error) {
+	stsName := instance.GetChStatefulSetName(shard, replica)
+	r.log.Info("delete sts","stsName",stsName)
+
+	foundSts := &appsv1.StatefulSet{}
+	err = r.client.Get(context.TODO(), types.NamespacedName{
+		Name:      stsName,
+		Namespace: instance.Namespace,
+	}, foundSts)
+
+	if err != nil {
+		r.log.Error(err, "get clickhouse statefulset error")
+		return err
+	}
+
+	err = r.client.Delete(context.TODO(), foundSts)
+	if err != nil {
+		r.log.Error(err, "Error deleteing clickhouse statefulset.", "Name", stsName)
+	}
+	return nil
+}
+
+func (r *ReconcileClickHouseCluster) reconcileChHeadlessService(instance *v1beta1.ClickHouseCluster) (err error) {
+	shardNum := instance.Spec.ClickHouse.Shards
+	replicaNum := instance.Spec.ClickHouse.Replicas
+
+	for shard := int32(0); shard < shardNum; shard++ {
+		for replica := int32(0); replica < replicaNum; replica++ {
+			err = r.CreateOrUpdateChHeadService(instance, shard, replica)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	currentShards := instance.Status.ChShardNum
+	currentReplicas := instance.Status.ChReplicaNum
+
+	if currentShards <= shardNum && currentReplicas <= replicaNum {
+		r.log.Info("ClickHouse cluster service has not change")
+		return nil
+	}
+
+	r.log.Info("ClickHouse instance service expected status",
+		"expectedShards", instance.Status.ChShardNum,
+		"expectedReplicas", instance.Status.ChReplicaNum,
+		"currentShards", currentShards,
+		"currentReplicas", currentReplicas)
+
+	if currentShards > shardNum {
+		for shard := currentShards; shard > shardNum; shard-- {
+			for replica := int32(0); replica < currentReplicas; replica++ {
+				_ = r.DeleteChHeadService(instance, shard - 1, replica)
+			}
+		}
+	}
+
+	if currentReplicas > replicaNum {
+		for shard := int32(0); shard < shardNum; shard++ {
+			for replica := currentReplicas; replica > replicaNum; replica-- {
+				_ = r.DeleteChHeadService(instance, shard, replica - 1)
+			}
+		}
+	}
+
+	return nil
+}
+
+func (r *ReconcileClickHouseCluster) CreateOrUpdateChHeadService(instance *v1beta1.ClickHouseCluster, shard, replica int32) (err error) {
+	svc := MakeChHeadlessService(instance, shard, replica)
+	if err = controllerutil.SetControllerReference(instance, svc, r.scheme); err != nil {
+		return err
+	}
+	foundSvc := &corev1.Service{}
+	err = r.client.Get(context.TODO(), types.NamespacedName{
+		Name:      svc.Name,
+		Namespace: svc.Namespace,
+	}, foundSvc)
+	if err != nil && errors.IsNotFound(err) {
+		r.log.Info("Creating new ClickHouse headless Service",
+			"Service.Namespace", svc.Namespace,
+			"Service.Name", svc.Name)
+		err = r.client.Create(context.TODO(), svc)
+		if err != nil {
+			return err
+		}
+		return nil
+	} else if err != nil {
+		return err
 	} else {
-		annotationMap = map[string]string{}
+		r.log.Info("Updating existing headless Service",
+			"Service.Namespace", foundSvc.Namespace,
+			"Service.Name", foundSvc.Name)
+		SyncService(foundSvc, svc)
+		err = r.client.Update(context.TODO(), foundSvc)
+		if err != nil {
+			return err
+		}
 	}
-	svcPorts := v1beta1.FillChServicePortsWithDefaults(c.Spec.ClickHouse.Ports)
-	service := v1.Service{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "Service",
-			APIVersion: "v1",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      svcName,
-			Namespace: c.Namespace,
-			Labels: common.MergeLabels(
-				c.Spec.ClickHouse.Labels,
-				map[string]string{"app": c.GetChStatefulSetName(shard, replica)},
-			),
-			Annotations: annotationMap,
-		},
-		Spec: v1.ServiceSpec{
-			Ports:    svcPorts,
-			Selector: map[string]string{"app": c.GetChStatefulSetName(shard, replica)},
-		},
-	}
-	service.Spec.ClusterIP = v1.ClusterIPNone
-	return &service
+	return nil
 }
 
-func MakeChStatefulSet(c *v1beta1.ClickHouseCluster, shard, replica int32) *appsv1.StatefulSet {
-	var chDataVolume = "data"
-	var one = int32(1)
-	var extraVolumes []v1.Volume
-	persistence := v1beta1.Persistence{}
-	persistence.WithDefaults()
-	var pvcs []v1.PersistentVolumeClaim
-	if strings.EqualFold(c.Spec.ClickHouse.StorageType, "ephemeral") {
-		extraVolumes = append(extraVolumes, v1.Volume{
-			Name: chDataVolume,
-			VolumeSource: v1.VolumeSource{
-				EmptyDir: &v1.EmptyDirVolumeSource{},
-			},
-		})
-	} else {
-		pvcs = append(pvcs, v1.PersistentVolumeClaim{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: chDataVolume,
-				Labels: common.MergeLabels(
-					c.Spec.ClickHouse.Labels,
-					map[string]string{"app": c.GetChStatefulSetName(shard, replica)},
-				),
-				Annotations: c.Spec.ClickHouse.Persistence.Annotations,
-			},
-			Spec: persistence.PersistentVolumeClaimSpec,
-		})
+func (r *ReconcileClickHouseCluster) DeleteChHeadService(instance *v1beta1.ClickHouseCluster, shard, replica int32) (err error) {
+	svcName := instance.GetChStatefulSetName(shard, replica)
+	r.log.Info("delete svc","svsName",svcName)
+
+	foundSvc := &corev1.Service{}
+	err = r.client.Get(context.TODO(), types.NamespacedName{
+		Name:      svcName,
+		Namespace: instance.Namespace,
+	}, foundSvc)
+
+	if err != nil {
+		r.log.Error(err, "get clickhouse headless service error")
+		return err
 	}
-	return &appsv1.StatefulSet{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "StatefulSet",
-			APIVersion: "apps/v1",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      c.GetChStatefulSetName(shard, replica),
-			Namespace: c.Namespace,
-			Labels: common.MergeLabels(
-				c.Spec.ClickHouse.Labels,
-				map[string]string{"app": c.GetChStatefulSetName(shard, replica)},
-			),
-		},
-		Spec: appsv1.StatefulSetSpec{
-			ServiceName: c.GetChStatefulSetName(shard, replica),
-			Replicas:    &one,
-			Selector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{"app": c.GetChStatefulSetName(shard, replica)},
-			},
-			UpdateStrategy: appsv1.StatefulSetUpdateStrategy{
-				Type: appsv1.RollingUpdateStatefulSetStrategyType,
-			},
-			PodManagementPolicy: appsv1.OrderedReadyPodManagement,
-			Template: v1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					GenerateName: c.GetChStatefulSetName(shard, replica),
-					Labels: common.MergeLabels(
-						c.Spec.ClickHouse.Labels,
-						map[string]string{"app": c.GetChStatefulSetName(shard, replica)},
-					),
-					Annotations: c.Spec.ClickHouse.Pod.Annotations,
-				},
-				Spec: makeChPodSpec(c, extraVolumes, shard, replica),
-			},
-			VolumeClaimTemplates: pvcs,
-		},
+
+	err = r.client.Delete(context.TODO(), foundSvc)
+	if err != nil {
+		r.log.Error(err, "Error deleteing clickhouse headless service.", "Name", svcName)
+	}
+	return nil
+}
+
+func (r *ReconcileClickHouseCluster) waitChStatefulSetFinish(instance *v1beta1.ClickHouseCluster) (err error) {
+	r.log.Info("reconcile clickhouse pods start...")
+	for shard := int32(0); shard < instance.Spec.ClickHouse.Shards; shard++ {
+		for replica := int32(0); replica < instance.Spec.ClickHouse.Replicas; replica++ {
+			err = r.pollChStatefulSet(instance, shard, replica)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	r.log.Info("reconcile clickhouse pods finish...")
+	return nil
+}
+
+func (r *ReconcileClickHouseCluster) pollChStatefulSet(instance *v1beta1.ClickHouseCluster, shard, replica int32) (err error) {
+	r.log.Info("reconcile clickhouse pod start...", "shard", shard, "replica", replica)
+	for {
+		foundSts := &appsv1.StatefulSet{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{
+			Name:      instance.GetChStatefulSetName(shard, replica),
+			Namespace: instance.Namespace,
+		}, foundSts)
+		if err != nil {
+			r.log.Error(err, "get clickhouse statefulset error")
+			return err
+		}
+
+		if foundSts.Status.ReadyReplicas == *foundSts.Spec.Replicas {
+			r.log.Info("reconcile clickhouse pod finish...", "shard", shard, "replica", replica)
+			return nil
+		}
+
+		r.log.Info("reconcile clickhouse pod",
+			"shard", shard,
+			"replica", replica)
+		time.Sleep(5 * time.Second)
 	}
 }
 
-func makeChPodSpec(c *v1beta1.ClickHouseCluster, volumes []v1.Volume, shard, replica int32) v1.PodSpec {
-	chInitContainer := v1.Container{
-		Name:            "init-container",
-		Image:           "busybox:1.28.3",
-		ImagePullPolicy: c.Spec.ClickHouse.Image.PullPolicy,
-		Command:         []string{"sh", "-c", config.GenerateChInitStartCommand(c)},
+func (r *ReconcileClickHouseCluster) reconcileChClusterStatus(instance *v1beta1.ClickHouseCluster) (err error) {
+	if instance.Status.IsClusterInUpgradingState() || instance.Status.IsClusterInUpgradeFailedState() {
+		return nil
 	}
-
-	ports := v1beta1.FillChContainerPortsWithDefaults(c.Spec.Zookeeper.Ports)
-	image := v1beta1.ContainerImage{}
-	image.WithChDefaults()
-	chContainer := v1.Container{
-		Name:            "clickhouse-server",
-		Image:           image.ToString(),
-		Ports:           ports,
-		ImagePullPolicy: image.PullPolicy,
-		ReadinessProbe: &v1.Probe{
-			Handler: v1.Handler{
-				TCPSocket: &v1.TCPSocketAction{
-					Port: intstr.IntOrString{
-						IntVal: 8123,
-					},
-				},
-			},
-			InitialDelaySeconds: 10,
-			TimeoutSeconds:      10,
-			PeriodSeconds:       30,
-			SuccessThreshold:    1,
-			FailureThreshold:    5,
-		},
-		LivenessProbe: &v1.Probe{
-			Handler: v1.Handler{
-				TCPSocket: &v1.TCPSocketAction{
-					Port: intstr.IntOrString{
-						IntVal: 8123,
-					},
-				},
-			},
-			InitialDelaySeconds: 300,
-			TimeoutSeconds:      30,
-			PeriodSeconds:       60,
-			SuccessThreshold:    1,
-			FailureThreshold:    5,
-		},
-		VolumeMounts: []v1.VolumeMount{
-			{Name: "data", MountPath: "/var/lib/clickhouse"},
-			{Name: "config", MountPath: "/etc/clickhouse-server/config.d"},
-			{Name: "private-config", MountPath: "/etc/clickhouse-server/conf.d"},
-		},
-		Command: []string{"bash", "-c", config.GenerateChStartCommand()},
+	instance.Status.Init()
+	instance.Status.ChShardNum = instance.Spec.ClickHouse.Shards
+	instance.Status.ChReplicaNum = instance.Spec.ClickHouse.Replicas
+	_ = r.client.Status().Update(context.TODO(), instance)
+	r.log.Info("reconcile clickhouse pods start...")
+	instance.Status.ChReplicas = instance.Spec.ClickHouse.Shards * instance.Spec.ClickHouse.Replicas
+	for shard := int32(0); shard < instance.Spec.ClickHouse.Shards; shard++ {
+		for replica := int32(0); replica < instance.Spec.ClickHouse.Replicas; replica++ {
+			err = r.pollChStatefulSet(instance, shard, replica)
+			if err != nil {
+				return err
+			}
+			instance.Status.ChReadyReplicas = (shard + 1) * (replica + 1)
+			_ = r.client.Status().Update(context.TODO(), instance)
+		}
 	}
-	if c.Spec.ClickHouse.Pod.Resources.Limits != nil || c.Spec.ClickHouse.Pod.Resources.Requests != nil {
-		chContainer.Resources = c.Spec.ClickHouse.Pod.Resources
-	}
-	volumes = append(volumes, []v1.Volume{
-		{
-			Name: "config",
-			VolumeSource: v1.VolumeSource{
-				ConfigMap: &v1.ConfigMapVolumeSource{
-					LocalObjectReference: v1.LocalObjectReference{
-						Name: c.GetChName(),
-					},
-				},
-			},
-		},
-		{
-			Name: "private-config",
-			VolumeSource: v1.VolumeSource{
-				ConfigMap: &v1.ConfigMapVolumeSource{
-					LocalObjectReference: v1.LocalObjectReference{
-						Name: c.GetChStatefulSetName(shard, replica),
-					},
-				},
-			},
-		},
-	}...)
-
-	metricsContainer := v1.Container{
-		Name:            "clickhouse-exporter",
-		Image:           "f1yegor/clickhouse-exporter",
-		Ports:           []v1.ContainerPort{v1.ContainerPort{ContainerPort: 9116}},
-		ImagePullPolicy: image.PullPolicy,
-		Command: []string{"sh", "-c",
-			"/usr/local/bin/clickhouse_exporter -scrape_uri=http://localhost:8123"},
-	}
-
-	podSpec := v1.PodSpec{
-		InitContainers: []v1.Container{chInitContainer},
-		Containers:     append(c.Spec.ClickHouse.Containers, chContainer, metricsContainer),
-		Affinity:       c.Spec.ClickHouse.Pod.Affinity,
-		Volumes:        append(c.Spec.ClickHouse.Volumes, volumes...),
-	}
-	//if reflect.DeepEqual(v1.PodSecurityContext{}, c.Spec.ClickHouse.Pod.SecurityContext) {
-	//	podSpec.SecurityContext = c.Spec.ClickHouse.Pod.SecurityContext
-	//}
-	podSpec.NodeSelector = c.Spec.ClickHouse.Pod.NodeSelector
-	podSpec.Tolerations = c.Spec.ClickHouse.Pod.Tolerations
-	podSpec.TerminationGracePeriodSeconds = &c.Spec.ClickHouse.Pod.TerminationGracePeriodSeconds
-	podSpec.ServiceAccountName = c.Spec.ClickHouse.Pod.ServiceAccountName
-	podSpec.HostAliases = []v1.HostAlias{
-		{
-			IP:        "127.0.0.1",
-			Hostnames: []string{c.GetChStatefulSetName(shard, replica)},
-		},
-	}
-	return podSpec
+	r.log.Info("reconcile clickhouse pods finish...")
+	instance.Status.SetPodsReadyConditionTrue()
+	_ = r.client.Status().Update(context.TODO(), instance)
+	return nil
 }
+
+

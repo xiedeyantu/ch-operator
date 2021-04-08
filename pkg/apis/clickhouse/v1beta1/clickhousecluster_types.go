@@ -12,57 +12,35 @@ type ClickHouseClusterSpec struct {
 }
 
 type Zookeeper struct {
-	Name                    string             `json:"name"`
-	Image                   ContainerImage     `json:"image,omitempty"`
-	Labels                  map[string]string  `json:"labels,omitempty"`
-	Replicas                int32              `json:"replicas,omitempty"`
-	Ports                   []v1.ContainerPort `json:"ports,omitempty"`
-	Pod                     PodPolicy          `json:"pod,omitempty"`
-	StorageType             string             `json:"storageType,omitempty"`
-	Persistence             *Persistence       `json:"persistence,omitempty"`
-	Ephemeral               *Ephemeral         `json:"ephemeral,omitempty"`
-	Conf                    ZookeeperConfig    `json:"config,omitempty"`
-	DomainName              string             `json:"domainName,omitempty"`
-	KubernetesClusterDomain string             `json:"kubernetesClusterDomain,omitempty"`
-	Containers              []v1.Container     `json:"containers,omitempty"`
-	Volumes                 []v1.Volume        `json:"volumes,omitempty"`
+	Name        string                  `json:"name"`
+	Image       ContainerImage          `json:"image,omitempty"`
+	Labels      map[string]string       `json:"labels,omitempty"`
+	Replicas    int32                   `json:"replicas,omitempty"`
+	Ports       []v1.ContainerPort      `json:"ports,omitempty"`
+	StorageType string                  `json:"storageType,omitempty"`
+	Resources   v1.ResourceRequirements `json:"resources,omitempty"`
+	Persistence *Persistence            `json:"persistence,omitempty"`
+	Conf        ZookeeperConfig         `json:"config,omitempty"`
+	Volumes     []v1.Volume             `json:"volumes,omitempty"`
 }
 
 type ClickHouse struct {
-	Name        string             `json:"name"`
-	Image       ContainerImage     `json:"image,omitempty"`
-	Labels      map[string]string  `json:"labels,omitempty"`
-	Shards      int32              `json:"shards,omitempty"`
-	Replicas    int32              `json:"replicas,omitempty"`
-	Ports       []v1.ContainerPort `json:"ports,omitempty"`
-	Pod         PodPolicy          `json:"pod,omitempty"`
-	StorageType string             `json:"storageType,omitempty"`
-	Persistence *Persistence       `json:"persistence,omitempty"`
-	Ephemeral   *Ephemeral         `json:"ephemeral,omitempty"`
-	//Conf ClickHouseConfig `json:"config,omitempty"`
-	DomainName string         `json:"domainName,omitempty"`
-	Containers []v1.Container `json:"containers,omitempty"`
-	Volumes    []v1.Volume    `json:"volumes,omitempty"`
+	Name        string                  `json:"name"`
+	Image       ContainerImage          `json:"image,omitempty"`
+	Labels      map[string]string       `json:"labels,omitempty"`
+	Shards      int32                   `json:"shards,omitempty"`
+	Replicas    int32                   `json:"replicas,omitempty"`
+	Ports       []v1.ContainerPort      `json:"ports,omitempty"`
+	StorageType string                  `json:"storageType,omitempty"`
+	Resources   v1.ResourceRequirements `json:"resources,omitempty"`
+	Persistence *Persistence            `json:"persistence,omitempty"`
+	Volumes     []v1.Volume             `json:"volumes,omitempty"`
 }
 
 type ContainerImage struct {
 	Repository string        `json:"repository,omitempty"`
 	Tag        string        `json:"tag,omitempty"`
 	PullPolicy v1.PullPolicy `json:"pullPolicy,omitempty"`
-}
-
-type PodPolicy struct {
-	Labels                        map[string]string         `json:"labels,omitempty"`
-	NodeSelector                  map[string]string         `json:"nodeSelector,omitempty"`
-	Affinity                      *v1.Affinity              `json:"affinity,omitempty"`
-	Resources                     v1.ResourceRequirements   `json:"resources,omitempty"`
-	Tolerations                   []v1.Toleration           `json:"tolerations,omitempty"`
-	Env                           []v1.EnvVar               `json:"env,omitempty"`
-	Annotations                   map[string]string         `json:"annotations,omitempty"`
-	SecurityContext               *v1.PodSecurityContext    `json:"securityContext,omitempty"`
-	TerminationGracePeriodSeconds int64                     `json:"terminationGracePeriodSeconds,omitempty"`
-	ServiceAccountName            string                    `json:"serviceAccountName,omitempty"`
-	ImagePullSecrets              []v1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
 }
 
 type Persistence struct {
@@ -172,13 +150,25 @@ type ZookeeperConfig struct {
 
 // ClickHouseClusterStatus defines the observed state of ClickHouseCluster
 type ClickHouseClusterStatus struct {
-	ZkReplicas      int32              `json:"zkReplicas,omitempty"`
-	ZkReadyReplicas int32              `json:"zkReadyReplicas,omitempty"`
-	ChReplicas      int32              `json:"chReplicas,omitempty"`
-	ChReadyReplicas int32              `json:"chReadyReplicas,omitempty"`
-	ChShardNum      int32              `json:"chShardNum,omitempty"`
-	ChReplicaNum    int32              `json:"chReplicaNum,omitempty"`
-	Conditions      []ClusterCondition `json:"conditions,omitempty"`
+	ZkReplicas       int32              `json:"zkReplicas,omitempty"`
+	ZkReadyReplicas  int32              `json:"zkReadyReplicas,omitempty"`
+	ChReplicas       int32              `json:"chReplicas,omitempty"`
+	ChReadyReplicas  int32              `json:"chReadyReplicas,omitempty"`
+	ChShardNum       int32              `json:"chShardNum,omitempty"`
+	ChReplicaNum     int32              `json:"chReplicaNum,omitempty"`
+	Conditions       []ClusterCondition `json:"conditions,omitempty"`
+	ZookeeperStatus  ZookeeperStatus    `json:"zookeeperStatus,omitempty"`
+	ClickHouseStatus ClickHouseStatus   `json:"clickhouseStatus,omitempty"`
+}
+
+type ZookeeperStatus struct {
+	Resources v1.ResourceRequirements `json:"resources,omitempty" protobuf:"bytes,8,opt,name=resources"`
+	Volumes   []v1.Volume             `json:"volumes,omitempty" patchStrategy:"merge" patchMergeKey:"mountPath" protobuf:"bytes,9,rep,name=volumeMounts"`
+}
+
+type ClickHouseStatus struct {
+	Resources v1.ResourceRequirements `json:"resources,omitempty" protobuf:"bytes,8,opt,name=resources"`
+	Volumes   []v1.Volume             `json:"volumes,omitempty" patchStrategy:"merge" patchMergeKey:"mountPath" protobuf:"bytes,9,rep,name=volumeMounts"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

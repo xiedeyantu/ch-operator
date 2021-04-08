@@ -4,7 +4,6 @@ import (
 	"fmt"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
@@ -40,14 +39,6 @@ func (c *ClickHouseCluster) GetZkName() string {
 // ConfigMapName returns the name of the cluster config-map
 func (z *ClickHouseCluster) ConfigMapName() string {
 	return fmt.Sprintf("%s-configmap", z.Spec.Zookeeper.Name)
-}
-
-// GetKubernetesClusterDomain returns the cluster domain of kubernetes
-func (z *ClickHouseCluster) GetKubernetesClusterDomain() string {
-	if z.Spec.Zookeeper.KubernetesClusterDomain == "" {
-		return "cluster.local"
-	}
-	return z.Spec.Zookeeper.KubernetesClusterDomain
 }
 
 func FillChContainerPortsWithDefaults(cp []v1.ContainerPort) (containerPorts []v1.ContainerPort) {
@@ -190,44 +181,6 @@ func (p *Persistence) WithDefaults() {
 	}
 }
 
-func (p *PodPolicy) WithDefaults(c *ClickHouseCluster) {
-	if p.Labels == nil {
-		p.Labels = map[string]string{}
-	}
-	if p.TerminationGracePeriodSeconds == 0 {
-		p.TerminationGracePeriodSeconds = DefaultTerminationGracePeriod
-	}
-	if p.ServiceAccountName == "" {
-		p.ServiceAccountName = "default"
-	}
-	if c.Spec.Zookeeper.Pod.Labels == nil {
-		p.Labels = map[string]string{}
-	}
-	if p.Affinity == nil {
-		p.Affinity = &v1.Affinity{
-			PodAntiAffinity: &v1.PodAntiAffinity{
-				PreferredDuringSchedulingIgnoredDuringExecution: []v1.WeightedPodAffinityTerm{
-					{
-						Weight: 20,
-						PodAffinityTerm: v1.PodAffinityTerm{
-							TopologyKey: "kubernetes.io/hostname",
-							LabelSelector: &metav1.LabelSelector{
-								MatchExpressions: []metav1.LabelSelectorRequirement{
-									{
-										Key:      "app",
-										Operator: metav1.LabelSelectorOpIn,
-										Values:   []string{c.GetZkName()},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		}
-	}
-}
-
 func (c *ContainerImage) WithChDefaults() {
 	if c.Repository == "" {
 		c.Repository = DefaultChContainerRepository
@@ -309,11 +262,10 @@ func (c *ContainerImage) ToString() string {
 }
 
 func GenerateZkDomain(c *ClickHouseCluster, index int32) (ZkDomain string) {
-	ZkDomain = fmt.Sprintf("%s-%d.%s.%s.svc.%s",
+	ZkDomain = fmt.Sprintf("%s-%d.%s.%s.svc.cluster.local",
 		c.GetZkName(),
 		index,
 		fmt.Sprintf("%s-zk", c.GetZkName()),
-		c.GetNamespace(),
-		c.GetKubernetesClusterDomain())
+		c.GetNamespace())
 	return ZkDomain
 }
