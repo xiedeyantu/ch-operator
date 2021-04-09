@@ -38,13 +38,6 @@ func (in *ClickHouse) DeepCopyInto(out *ClickHouse) {
 		*out = new(Persistence)
 		(*in).DeepCopyInto(*out)
 	}
-	if in.Volumes != nil {
-		in, out := &in.Volumes, &out.Volumes
-		*out = make([]v1.Volume, len(*in))
-		for i := range *in {
-			(*in)[i].DeepCopyInto(&(*out)[i])
-		}
-	}
 	return
 }
 
@@ -156,12 +149,10 @@ func (in *ClickHouseClusterStatus) DeepCopy() *ClickHouseClusterStatus {
 func (in *ClickHouseStatus) DeepCopyInto(out *ClickHouseStatus) {
 	*out = *in
 	in.Resources.DeepCopyInto(&out.Resources)
-	if in.Volumes != nil {
-		in, out := &in.Volumes, &out.Volumes
-		*out = make([]v1.Volume, len(*in))
-		for i := range *in {
-			(*in)[i].DeepCopyInto(&(*out)[i])
-		}
+	if in.Persistence != nil {
+		in, out := &in.Persistence, &out.Persistence
+		*out = new(Persistence)
+		(*in).DeepCopyInto(*out)
 	}
 	return
 }
@@ -272,13 +263,6 @@ func (in *Zookeeper) DeepCopyInto(out *Zookeeper) {
 		(*in).DeepCopyInto(*out)
 	}
 	out.Conf = in.Conf
-	if in.Volumes != nil {
-		in, out := &in.Volumes, &out.Volumes
-		*out = make([]v1.Volume, len(*in))
-		for i := range *in {
-			(*in)[i].DeepCopyInto(&(*out)[i])
-		}
-	}
 	return
 }
 
@@ -312,12 +296,10 @@ func (in *ZookeeperConfig) DeepCopy() *ZookeeperConfig {
 func (in *ZookeeperStatus) DeepCopyInto(out *ZookeeperStatus) {
 	*out = *in
 	in.Resources.DeepCopyInto(&out.Resources)
-	if in.Volumes != nil {
-		in, out := &in.Volumes, &out.Volumes
-		*out = make([]v1.Volume, len(*in))
-		for i := range *in {
-			(*in)[i].DeepCopyInto(&(*out)[i])
-		}
+	if in.Persistence != nil {
+		in, out := &in.Persistence, &out.Persistence
+		*out = new(Persistence)
+		(*in).DeepCopyInto(*out)
 	}
 	return
 }

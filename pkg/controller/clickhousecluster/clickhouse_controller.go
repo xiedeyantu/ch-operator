@@ -63,19 +63,22 @@ func (r *ReconcileClickHouseCluster) reconcileChConfigMap(instance *v1beta1.Clic
 	if err != nil {
 		return err
 	}
+
 	err = r.CreateOrUpdateChConfigMap(instance, common.Private)
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 
 func (r *ReconcileClickHouseCluster) reconcileChStatefulSet(instance *v1beta1.ClickHouseCluster) (err error) {
-	shardNum := instance.Spec.ClickHouse.Shards
-	replicaNum := instance.Spec.ClickHouse.Replicas
+	clickhouse := instance.Spec.ClickHouse
+	expectedShards := clickhouse.Shards
+	expectedReplicas := clickhouse.Replicas
 
-	for shard := int32(0); shard < shardNum; shard++ {
-		for replica := int32(0); replica < replicaNum; replica++ {
+	for shard := int32(0); shard < expectedShards; shard++ {
+		for replica := int32(0); replica < expectedReplicas; replica++ {
 			err = r.CreateOrUpdateChStatefulSet(instance, shard, replica)
 			if err != nil {
 				return err
@@ -83,31 +86,30 @@ func (r *ReconcileClickHouseCluster) reconcileChStatefulSet(instance *v1beta1.Cl
 		}
 	}
 
-	currentShards := instance.Status.ChShardNum
-	currentReplicas := instance.Status.ChReplicaNum
+	clickhouseStatus := instance.Status.ClickHouseStatus
+	currentShards := clickhouseStatus.Shards
+	currentReplicas := clickhouseStatus.Replicas
 
-	if currentShards <= shardNum && currentReplicas <= replicaNum {
+	if currentShards <= expectedShards && currentReplicas <= expectedReplicas {
 		r.log.Info("ClickHouse cluster has not change")
 		return nil
 	}
 
 	r.log.Info("ClickHouse instance expected status",
-		"expectedShards", instance.Status.ChShardNum,
-		"expectedReplicas", instance.Status.ChReplicaNum,
-		"currentShards", currentShards,
-		"currentReplicas", currentReplicas)
+		"expectedShards", expectedShards, "expectedReplicas", expectedReplicas,
+		"currentShards", currentShards, "currentReplicas", currentReplicas)
 
-	if currentShards > shardNum {
-		for shard := currentShards; shard > shardNum; shard-- {
+	if currentShards > expectedShards {
+		for shard := currentShards; shard > expectedShards; shard-- {
 			for replica := int32(0); replica < currentReplicas; replica++ {
 				_ = r.DeleteChStatefulSet(instance, shard - 1, replica)
 			}
 		}
 	}
 
-	if currentReplicas > replicaNum {
-		for shard := int32(0); shard < shardNum; shard++ {
-			for replica := currentReplicas; replica > replicaNum; replica-- {
+	if currentReplicas > expectedReplicas {
+		for shard := int32(0); shard < expectedShards; shard++ {
+			for replica := currentReplicas; replica > expectedReplicas; replica-- {
 				_ = r.DeleteChStatefulSet(instance, shard, replica - 1)
 			}
 		}
@@ -118,9 +120,11 @@ func (r *ReconcileClickHouseCluster) reconcileChStatefulSet(instance *v1beta1.Cl
 
 func (r *ReconcileClickHouseCluster) CreateOrUpdateChStatefulSet(instance *v1beta1.ClickHouseCluster, shard, replica int32) (err error) {
 	sts := MakeChStatefulSet(instance, shard, replica)
+
 	if err = controllerutil.SetControllerReference(instance, sts, r.scheme); err != nil {
 		return err
 	}
+
 	foundSts := &appsv1.StatefulSet{}
 	err = r.client.Get(context.TODO(), types.NamespacedName{
 		Name:      sts.Name,
@@ -139,8 +143,12 @@ func (r *ReconcileClickHouseCluster) CreateOrUpdateChStatefulSet(instance *v1bet
 	}
 
 	expectedStorage := instance.Spec.ClickHouse.Persistence.PersistentVolumeClaimSpec.Resources.Requests[corev1.ResourceStorage]
-	currentStorage := instance.Status.ClickHouseStatus.Resources.Requests[corev1.ResourceStorage]
+	currentStorage := instance.Status.ClickHouseStatus.Persistence.PersistentVolumeClaimSpec.Resources.Requests[corev1.ResourceStorage]
 	if expectedStorage != currentStorage {
+		r.log.Info("ClickHouse instance storage change",
+			"expectedStorage", expectedStorage,
+			"currentStorage", currentStorage,
+			"stsName", sts.Name)
 		err = r.ScaleStorage(sts, "data", expectedStorage)
 		if err != nil {
 			return err
@@ -176,11 +184,12 @@ func (r *ReconcileClickHouseCluster) DeleteChStatefulSet(instance *v1beta1.Click
 }
 
 func (r *ReconcileClickHouseCluster) reconcileChHeadlessService(instance *v1beta1.ClickHouseCluster) (err error) {
-	shardNum := instance.Spec.ClickHouse.Shards
-	replicaNum := instance.Spec.ClickHouse.Replicas
+	clickhouse := instance.Spec.ClickHouse
+	expectedShards := clickhouse.Shards
+	expectedReplicas := clickhouse.Replicas
 
-	for shard := int32(0); shard < shardNum; shard++ {
-		for replica := int32(0); replica < replicaNum; replica++ {
+	for shard := int32(0); shard < expectedShards; shard++ {
+		for replica := int32(0); replica < expectedReplicas; replica++ {
 			err = r.CreateOrUpdateChHeadService(instance, shard, replica)
 			if err != nil {
 				return err
@@ -188,31 +197,30 @@ func (r *ReconcileClickHouseCluster) reconcileChHeadlessService(instance *v1beta
 		}
 	}
 
-	currentShards := instance.Status.ChShardNum
-	currentReplicas := instance.Status.ChReplicaNum
+	clickhouseStatus := instance.Status.ClickHouseStatus
+	currentShards := clickhouseStatus.Shards
+	currentReplicas := clickhouseStatus.Replicas
 
-	if currentShards <= shardNum && currentReplicas <= replicaNum {
+	if currentShards <= expectedShards && currentReplicas <= expectedReplicas {
 		r.log.Info("ClickHouse cluster service has not change")
 		return nil
 	}
 
 	r.log.Info("ClickHouse instance service expected status",
-		"expectedShards", instance.Status.ChShardNum,
-		"expectedReplicas", instance.Status.ChReplicaNum,
-		"currentShards", currentShards,
-		"currentReplicas", currentReplicas)
+		"expectedShards", expectedShards, "expectedReplicas", expectedReplicas,
+		"currentShards", currentShards, "currentReplicas", currentReplicas)
 
-	if currentShards > shardNum {
-		for shard := currentShards; shard > shardNum; shard-- {
+	if currentShards > expectedShards {
+		for shard := currentShards; shard > expectedShards; shard-- {
 			for replica := int32(0); replica < currentReplicas; replica++ {
 				_ = r.DeleteChHeadService(instance, shard - 1, replica)
 			}
 		}
 	}
 
-	if currentReplicas > replicaNum {
-		for shard := int32(0); shard < shardNum; shard++ {
-			for replica := currentReplicas; replica > replicaNum; replica-- {
+	if currentReplicas > expectedReplicas {
+		for shard := int32(0); shard < expectedReplicas; shard++ {
+			for replica := currentReplicas; replica > expectedReplicas; replica-- {
 				_ = r.DeleteChHeadService(instance, shard, replica - 1)
 			}
 		}
@@ -223,9 +231,11 @@ func (r *ReconcileClickHouseCluster) reconcileChHeadlessService(instance *v1beta
 
 func (r *ReconcileClickHouseCluster) CreateOrUpdateChHeadService(instance *v1beta1.ClickHouseCluster, shard, replica int32) (err error) {
 	svc := MakeChHeadlessService(instance, shard, replica)
+
 	if err = controllerutil.SetControllerReference(instance, svc, r.scheme); err != nil {
 		return err
 	}
+
 	foundSvc := &corev1.Service{}
 	err = r.client.Get(context.TODO(), types.NamespacedName{
 		Name:      svc.Name,
@@ -252,6 +262,7 @@ func (r *ReconcileClickHouseCluster) CreateOrUpdateChHeadService(instance *v1bet
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -279,6 +290,7 @@ func (r *ReconcileClickHouseCluster) DeleteChHeadService(instance *v1beta1.Click
 
 func (r *ReconcileClickHouseCluster) waitChStatefulSetFinish(instance *v1beta1.ClickHouseCluster) (err error) {
 	r.log.Info("reconcile clickhouse pods start...")
+
 	for shard := int32(0); shard < instance.Spec.ClickHouse.Shards; shard++ {
 		for replica := int32(0); replica < instance.Spec.ClickHouse.Replicas; replica++ {
 			err = r.pollChStatefulSet(instance, shard, replica)
@@ -287,12 +299,15 @@ func (r *ReconcileClickHouseCluster) waitChStatefulSetFinish(instance *v1beta1.C
 			}
 		}
 	}
+
 	r.log.Info("reconcile clickhouse pods finish...")
+
 	return nil
 }
 
 func (r *ReconcileClickHouseCluster) pollChStatefulSet(instance *v1beta1.ClickHouseCluster, shard, replica int32) (err error) {
 	r.log.Info("reconcile clickhouse pod start...", "shard", shard, "replica", replica)
+
 	for {
 		foundSts := &appsv1.StatefulSet{}
 		err = r.client.Get(context.TODO(), types.NamespacedName{
@@ -312,6 +327,7 @@ func (r *ReconcileClickHouseCluster) pollChStatefulSet(instance *v1beta1.ClickHo
 		r.log.Info("reconcile clickhouse pod",
 			"shard", shard,
 			"replica", replica)
+
 		time.Sleep(5 * time.Second)
 	}
 }
@@ -320,25 +336,30 @@ func (r *ReconcileClickHouseCluster) reconcileChClusterStatus(instance *v1beta1.
 	if instance.Status.IsClusterInUpgradingState() || instance.Status.IsClusterInUpgradeFailedState() {
 		return nil
 	}
+
 	instance.Status.Init()
-	instance.Status.ChShardNum = instance.Spec.ClickHouse.Shards
-	instance.Status.ChReplicaNum = instance.Spec.ClickHouse.Replicas
+	instance.Status.ClickHouseStatus.Shards = instance.Spec.ClickHouse.Shards
+	instance.Status.ClickHouseStatus.Replicas = instance.Spec.ClickHouse.Replicas
 	_ = r.client.Status().Update(context.TODO(), instance)
 	r.log.Info("reconcile clickhouse pods start...")
-	instance.Status.ChReplicas = instance.Spec.ClickHouse.Shards * instance.Spec.ClickHouse.Replicas
+
+	instance.Status.ChNodes = instance.Spec.ClickHouse.Shards * instance.Spec.ClickHouse.Replicas
 	for shard := int32(0); shard < instance.Spec.ClickHouse.Shards; shard++ {
 		for replica := int32(0); replica < instance.Spec.ClickHouse.Replicas; replica++ {
 			err = r.pollChStatefulSet(instance, shard, replica)
 			if err != nil {
 				return err
 			}
-			instance.Status.ChReadyReplicas = (shard + 1) * (replica + 1)
+			instance.Status.ChReadyNodes = (shard + 1) * (replica + 1)
 			_ = r.client.Status().Update(context.TODO(), instance)
 		}
 	}
+
 	r.log.Info("reconcile clickhouse pods finish...")
+
 	instance.Status.SetPodsReadyConditionTrue()
 	_ = r.client.Status().Update(context.TODO(), instance)
+
 	return nil
 }
 

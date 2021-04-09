@@ -132,7 +132,7 @@ func makeZkPodSpec(c *v1beta1.ClickHouseCluster, volumes []v1.Volume) v1.PodSpec
 	})
 	podSpec := v1.PodSpec{
 		Containers: []v1.Container{zkContainer},
-		Volumes:    append(c.Spec.Zookeeper.Volumes, volumes...),
+		Volumes:    volumes,
 	}
 	return podSpec
 }

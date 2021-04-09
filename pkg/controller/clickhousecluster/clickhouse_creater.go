@@ -237,7 +237,7 @@ func makeChPodSpec(c *v1beta1.ClickHouseCluster, volumes []v1.Volume, shard, rep
 	podSpec := v1.PodSpec{
 		InitContainers: []v1.Container{chInitContainer},
 		Containers:     []v1.Container{chContainer, metricsContainer},
-		Volumes:        append(c.Spec.ClickHouse.Volumes, volumes...),
+		Volumes:        volumes,
 	}
 	podSpec.HostAliases = []v1.HostAlias{
 		{

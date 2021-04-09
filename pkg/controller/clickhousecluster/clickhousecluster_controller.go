@@ -36,7 +36,7 @@ func newReconciler(mgr manager.Manager) reconcile.Reconciler {
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
 func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	// Create a new controller
-	c, err := controller.New("clickhousecluster-controller", mgr, controller.Options{Reconciler: r})
+	c, err := controller.New("clickhousecluster-controller", mgr, controller.Options{Reconciler: r, MaxConcurrentReconciles: 10})
 	if err != nil {
 		return err
 	}
@@ -76,8 +76,6 @@ type reconcileFun func(cluster *v1beta1.ClickHouseCluster) error
 
 // Reconcile reads that state of the cluster for a ClickHouseCluster object and makes changes based on the state read
 // and what is in the ClickHouseCluster.Spec
-// TODO(user): Modify this Reconcile function to implement your Controller logic.  This example creates
-// a Pod as an example
 // Note:
 // The Controller will requeue the Request to be processed again if the returned error is non-nil or
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
@@ -125,14 +123,16 @@ func (r *ReconcileClickHouseCluster) Reconcile(request reconcile.Request) (recon
 	}
 
 	instance.Status.ZookeeperStatus.Resources =
-		instance.Spec.Zookeeper.Persistence.PersistentVolumeClaimSpec.Resources
-	instance.Status.ZookeeperStatus.Volumes =
-		instance.Spec.Zookeeper.Volumes
+		instance.Spec.Zookeeper.Resources
+	instance.Status.ZookeeperStatus.Persistence =
+		instance.Spec.Zookeeper.Persistence
 	instance.Status.ClickHouseStatus.Resources =
-		instance.Spec.ClickHouse.Persistence.PersistentVolumeClaimSpec.Resources
-	instance.Status.ClickHouseStatus.Volumes =
-		instance.Spec.Zookeeper.Volumes
+		instance.Spec.ClickHouse.Resources
+	instance.Status.ClickHouseStatus.Persistence =
+		instance.Spec.Zookeeper.Persistence
 
+	_ = r.client.Status().Update(context.TODO(), instance)
 	// Recreate any missing resources every 'ReconcileTime'
+	time.Sleep(10 * time.Second)
 	return reconcile.Result{RequeueAfter: ReconcileTime}, nil
 }

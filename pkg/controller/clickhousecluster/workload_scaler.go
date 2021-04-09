@@ -10,6 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sync"
 	"time"
 )
 
@@ -53,6 +54,7 @@ func (r *ReconcileClickHouseCluster) StatefulSetScaleStorage(sts *appsv1.Statefu
 	storageRequest := map[corev1.ResourceName]resource.Quantity{}
 	storageRequest[corev1.ResourceStorage] = storage
 
+	var pvcList []*corev1.PersistentVolumeClaim
 	for _, pod := range podList.Items {
 		var pvcName string
 		for _, volume := range pod.Spec.Volumes {
@@ -79,7 +81,23 @@ func (r *ReconcileClickHouseCluster) StatefulSetScaleStorage(sts *appsv1.Statefu
 				"PodName", pod.Name)
 			return err
 		}
+
+		pvcList = append(pvcList, pvc)
 	}
+
+	var wg sync.WaitGroup
+	wg.Add(len(pvcList))
+	for _, pvc := range pvcList {
+		go func() {
+			err = r.pollPvc(pvc, storage)
+			if err != nil {
+				r.log.Error(err, "Polling Pod PersistentVolumeClaim error",
+					"pvcName", pvc.Name)
+			}
+			wg.Done()
+		}()
+	}
+	wg.Wait()
 
 	sts.ResourceVersion = ""
 	sts.Spec.VolumeClaimTemplates[0].Spec.Resources.Requests = storageRequest
@@ -95,4 +113,28 @@ func (r *ReconcileClickHouseCluster) StatefulSetScaleStorage(sts *appsv1.Statefu
 		"StatefulSet.Namespace", sts.Namespace,
 		"StatefulSet.Name", sts.Name)
 	return nil
+}
+
+func (r *ReconcileClickHouseCluster) pollPvc(pvc *corev1.PersistentVolumeClaim, storage resource.Quantity) (err error) {
+	r.log.Info("Polling pvc start...", "pvcName", pvc.Name)
+
+	for {
+		foundPvc := &corev1.PersistentVolumeClaim{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{
+			Name:      pvc.Name,
+			Namespace: pvc.Namespace,
+		}, foundPvc)
+		if err != nil {
+			r.log.Error(err, "Get pvc error")
+			return err
+		}
+
+		if foundPvc.Status.Capacity[corev1.ResourceStorage] == storage {
+			r.log.Info("Polling pvc finish...",
+				"pvcName", pvc.Name, "storage", storage)
+			return nil
+		}
+
+		time.Sleep(5 * time.Second)
+	}
 }

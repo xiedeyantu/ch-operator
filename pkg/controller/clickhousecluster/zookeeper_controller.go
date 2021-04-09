@@ -14,9 +14,11 @@ import (
 
 func (r *ReconcileClickHouseCluster) reconcileZkConfigMap(instance *v1beta1.ClickHouseCluster) (err error) {
 	cm := MakeZkConfigMap(instance)
+
 	if err = controllerutil.SetControllerReference(instance, cm, r.scheme); err != nil {
 		return err
 	}
+
 	foundCm := &corev1.ConfigMap{}
 	err = r.client.Get(context.TODO(), types.NamespacedName{
 		Name:      cm.Name,
@@ -43,19 +45,21 @@ func (r *ReconcileClickHouseCluster) reconcileZkConfigMap(instance *v1beta1.Clic
 			return err
 		}
 	}
+
 	return nil
 }
 
 func (r *ReconcileClickHouseCluster) reconcileZkStatefulSet(instance *v1beta1.ClickHouseCluster) (err error) {
-
-	// we cannot upgrade if cluster is in UpgradeFailed
 	if instance.Status.IsClusterInUpgradeFailedState() {
 		return nil
 	}
+
 	sts := MakeStatefulSet(instance)
+
 	if err = controllerutil.SetControllerReference(instance, sts, r.scheme); err != nil {
 		return err
 	}
+
 	foundSts := &appsv1.StatefulSet{}
 	err = r.client.Get(context.TODO(), types.NamespacedName{
 		Name:      sts.Name,
@@ -69,19 +73,20 @@ func (r *ReconcileClickHouseCluster) reconcileZkStatefulSet(instance *v1beta1.Cl
 		if err != nil {
 			return err
 		}
-		return nil
 	} else if err != nil {
 		return err
-	} else {
-		return nil
 	}
+
+	return nil
 }
 
 func (r *ReconcileClickHouseCluster) reconcileZkHeadlessService(instance *v1beta1.ClickHouseCluster) (err error) {
 	svc := MakeZkHeadlessService(instance)
+
 	if err = controllerutil.SetControllerReference(instance, svc, r.scheme); err != nil {
 		return err
 	}
+
 	foundSvc := &corev1.Service{}
 	err = r.client.Get(context.TODO(), types.NamespacedName{
 		Name:      svc.Name,
@@ -108,14 +113,17 @@ func (r *ReconcileClickHouseCluster) reconcileZkHeadlessService(instance *v1beta
 			return err
 		}
 	}
+
 	return nil
 }
 
 func (r *ReconcileClickHouseCluster) reconcileZkPodDisruptionBudget(instance *v1beta1.ClickHouseCluster) (err error) {
 	pdb := MakePodDisruptionBudget(instance)
+
 	if err = controllerutil.SetControllerReference(instance, pdb, r.scheme); err != nil {
 		return err
 	}
+
 	foundPdb := &policyv1beta1.PodDisruptionBudget{}
 	err = r.client.Get(context.TODO(), types.NamespacedName{
 		Name:      pdb.Name,
@@ -129,10 +137,10 @@ func (r *ReconcileClickHouseCluster) reconcileZkPodDisruptionBudget(instance *v1
 		if err != nil {
 			return err
 		}
-		return nil
 	} else if err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -140,8 +148,11 @@ func (r *ReconcileClickHouseCluster) reconcileZkClusterStatus(instance *v1beta1.
 	if instance.Status.IsClusterInUpgradingState() || instance.Status.IsClusterInUpgradeFailedState() {
 		return nil
 	}
+
 	instance.Status.Init()
+
 	r.log.Info("reconcile zookeeper pods start...")
+
 	instance.Status.ZkReplicas = instance.Spec.Zookeeper.Replicas
 	for {
 		foundSts := &appsv1.StatefulSet{}
@@ -156,9 +167,11 @@ func (r *ReconcileClickHouseCluster) reconcileZkClusterStatus(instance *v1beta1.
 
 		if foundSts.Status.ReadyReplicas == instance.Spec.Zookeeper.Replicas {
 			r.log.Info("reconcile zookeeper pods finish...")
+
 			instance.Status.ZkReadyReplicas = foundSts.Status.ReadyReplicas
 			instance.Status.ZkReplicas = instance.Spec.Zookeeper.Replicas
 			_ = r.client.Status().Update(context.TODO(), instance)
+
 			time.Sleep(1 * time.Second)
 			return nil
 		}
@@ -166,8 +179,10 @@ func (r *ReconcileClickHouseCluster) reconcileZkClusterStatus(instance *v1beta1.
 		r.log.Info("reconcile zk pods",
 			"ReadyReplicas", foundSts.Status.ReadyReplicas,
 			"Replicas", instance.Spec.Zookeeper.Replicas)
+
 		instance.Status.ZkReadyReplicas = foundSts.Status.ReadyReplicas
 		_ = r.client.Status().Update(context.TODO(), instance)
+
 		time.Sleep(5 * time.Second)
 	}
 }
