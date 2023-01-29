@@ -1,0 +1,31 @@
+# permissions for end users to edit clickhouseclusters.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: clusterrole
+    app.kubernetes.io/instance: clickhousecluster-editor-role
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/created-by: ch-operator
+    app.kubernetes.io/part-of: ch-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: clickhousecluster-editor-role
+rules:
+- apiGroups:
+  - clickhouse.xiedeyantu.com.clickhouse.xiedeyantu.com
+  resources:
+  - clickhouseclusters
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - clickhouse.xiedeyantu.com.clickhouse.xiedeyantu.com
+  resources:
+  - clickhouseclusters/status
+  verbs:
+  - get

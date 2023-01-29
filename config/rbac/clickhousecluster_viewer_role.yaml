@@ -1,0 +1,27 @@
+# permissions for end users to view clickhouseclusters.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: clusterrole
+    app.kubernetes.io/instance: clickhousecluster-viewer-role
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/created-by: ch-operator
+    app.kubernetes.io/part-of: ch-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: clickhousecluster-viewer-role
+rules:
+- apiGroups:
+  - clickhouse.xiedeyantu.com.clickhouse.xiedeyantu.com
+  resources:
+  - clickhouseclusters
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - clickhouse.xiedeyantu.com.clickhouse.xiedeyantu.com
+  resources:
+  - clickhouseclusters/status
+  verbs:
+  - get
