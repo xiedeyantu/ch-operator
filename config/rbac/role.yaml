@@ -1,0 +1,33 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  name: manager-role
+rules:
+- apiGroups:
+  - clickhouse.xiedeyantu.com.clickhouse.xiedeyantu.com
+  resources:
+  - clickhouseclusters
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - clickhouse.xiedeyantu.com.clickhouse.xiedeyantu.com
+  resources:
+  - clickhouseclusters/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - clickhouse.xiedeyantu.com.clickhouse.xiedeyantu.com
+  resources:
+  - clickhouseclusters/status
+  verbs:
+  - get
+  - patch
+  - update

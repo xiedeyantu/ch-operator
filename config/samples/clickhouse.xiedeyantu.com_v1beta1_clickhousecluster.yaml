@@ -1,0 +1,12 @@
+apiVersion: clickhouse.xiedeyantu.com.clickhouse.xiedeyantu.com/v1beta1
+kind: ClickHouseCluster
+metadata:
+  labels:
+    app.kubernetes.io/name: clickhousecluster
+    app.kubernetes.io/instance: clickhousecluster-sample
+    app.kubernetes.io/part-of: ch-operator
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: ch-operator
+  name: clickhousecluster-sample
+spec:
+  # TODO(user): Add fields here
