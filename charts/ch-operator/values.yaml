@@ -1,5 +1,0 @@
-chOperator:
-  replicas: 1
-  image: "xiedeyantu/ch-operator"
-  imageVersion: "v0.0.1"
-  imagePullPolicy: "Always"
